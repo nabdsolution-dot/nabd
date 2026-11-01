@@ -47,5 +47,5 @@ const app = await buildApp({
 await app.register(fastifyStatic, { root: web });
 
 const port = Number(process.env.PORT ?? 4000);
-await app.listen({ port, host: '127.0.0.1' });
+await app.listen({ port, host: process.env.HOST ?? '127.0.0.1' });
 console.log(`\nNabd is running.\n  Back office: http://localhost:${port}/\n  Web till:    http://localhost:${port}/till\n  Sign in:     admin@nabd.local / ChangeMe123!   (till PIN 4321)\n`);
