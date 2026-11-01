@@ -222,6 +222,15 @@ describe('product pictures and app version', () => {
     const id = (await call('GET', '/products?limit=1', admin)).body.items[0].id as string;
     expect((await call('PATCH', '/products/' + id, admin, { image: 'http://evil.example/x.png' })).status).toBe(400);
   });
+  it('reads the newest release from GitHub when nothing is set by hand', async () => {
+    const real = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({ tag_name: 'v9.8.7', body: 'x', assets: [{ name: 'nabd-cashier.apk', browser_download_url: 'https://example.test/a.apk' }] }))) as typeof fetch;
+    try {
+      const r = await call('GET', '/app/version');
+      expect(r.body.latest).toBe('9.8.7');
+      expect(r.body.url).toBe('https://example.test/a.apk');
+    } finally { globalThis.fetch = real; }
+  });
   it('shows the newest app version without signing in', async () => {
     const r = await call('GET', '/app/version');
     expect(r.status).toBe(200);
