@@ -205,3 +205,26 @@ describe('stores, tills and dashboard', () => {
     expect((await call('GET', '/dashboard', cashier)).status).toBe(403);
   });
 });
+
+describe('product pictures and app version', () => {
+  const dot = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  it('saves a picture on a product and returns it to the tills', async () => {
+    const list = await call('GET', '/products?limit=1', cashier);
+    const id = list.body.items[0].id as string;
+    const r = await call('PATCH', '/products/' + id, admin, { image: dot });
+    expect(r.status).toBe(200);
+    expect(r.body.image).toBe(dot);
+    const again = await call('GET', '/products?limit=200', cashier);
+    expect(again.body.items.find((p: { id: string }) => p.id === id).image).toBe(dot);
+    expect((await call('PATCH', '/products/' + id, admin, { image: null })).body.image).toBeNull();
+  });
+  it('rejects something that is not a picture', async () => {
+    const id = (await call('GET', '/products?limit=1', admin)).body.items[0].id as string;
+    expect((await call('PATCH', '/products/' + id, admin, { image: 'http://evil.example/x.png' })).status).toBe(400);
+  });
+  it('shows the newest app version without signing in', async () => {
+    const r = await call('GET', '/app/version');
+    expect(r.status).toBe(200);
+    expect(r.body).toHaveProperty('latest');
+  });
+});

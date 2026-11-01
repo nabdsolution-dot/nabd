@@ -9,9 +9,19 @@ import 'receipt.dart';
 import 'screens_extra.dart';
 import 'strings.dart';
 
-const cedar = Color(0xFF0E5A48);
-const cedarDeep = Color(0xFF0B4A3B);
-const saffron = Color(0xFFF0A500);
+// The accent colors follow the chosen color scheme (see applyPalette).
+Color cedar = const Color(0xFF0E5A48);
+Color cedarDeep = const Color(0xFF0B4A3B);
+Color saffron = const Color(0xFFF0A500);
+Color cedarLight = const Color(0xFF3FB992); // main color on dark backgrounds
+
+/// main, deep, button/accent, light (for dark mode)
+const accents = <String, List<Color>>{
+  'green': [Color(0xFF0E5A48), Color(0xFF0B4A3B), Color(0xFFF0A500), Color(0xFF3FB992)],
+  'blue': [Color(0xFF1D5FD1), Color(0xFF174BA8), Color(0xFFFF8A00), Color(0xFF6FA2FF)],
+  'red': [Color(0xFFC62839), Color(0xFFA01F2E), Color(0xFFFFB400), Color(0xFFFF7A86)],
+  'purple': [Color(0xFF6B3FC2), Color(0xFF55309C), Color(0xFFF2B705), Color(0xFFB697FF)],
+};
 const onSaffron = Color(0xFF12201C); // dark text that sits on the saffron buttons in both themes
 const alertRed = Color(0xFFB3261E);
 
@@ -24,7 +34,12 @@ Color waiting = const Color(0xFFFFF1CC);
 Color surface = Colors.white;
 Color okBg = const Color(0xFFDDF1E8);
 
-void applyPalette(bool dark) {
+void applyPalette(bool dark, String accent) {
+  final a = accents[accent] ?? accents['green']!;
+  cedar = a[0];
+  cedarDeep = a[1];
+  saffron = a[2];
+  cedarLight = a[3];
   if (dark) {
     ink = const Color(0xFFE8EEEB);
     mist = const Color(0xFF0F1B18);
@@ -84,13 +99,13 @@ class _NabdCashierAppState extends State<NabdCashierApp> with WidgetsBindingObse
       builder: (context, _) {
         final dark = state.themeMode == 'dark' ||
             (state.themeMode == 'system' && WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark);
-        applyPalette(dark);
+        applyPalette(dark, state.accent);
         final scheme = ColorScheme.fromSeed(
-          seedColor: cedar, primary: dark ? const Color(0xFF3FB992) : cedar, secondary: saffron,
+          seedColor: cedar, primary: dark ? cedarLight : cedar, secondary: saffron,
           brightness: dark ? Brightness.dark : Brightness.light,
         );
         return MaterialApp(
-          key: ValueKey('$dark-$currentLang'),
+          key: ValueKey('$dark-$currentLang-${state.accent}'),
           title: 'Nabd Cashier',
           debugShowCheckedModeBanner: false,
           themeMode: dark ? ThemeMode.dark : ThemeMode.light,
@@ -136,6 +151,8 @@ class _NabdCashierAppState extends State<NabdCashierApp> with WidgetsBindingObse
     );
   }
 }
+
+bool dark(BuildContext c) => Theme.of(c).brightness == Brightness.dark;
 
 ButtonStyle saffronButton() => FilledButton.styleFrom(
       backgroundColor: saffron,
@@ -214,6 +231,28 @@ class DisplaySheet extends StatelessWidget {
                 onSelectionChanged: (v) => state.setThemeMode(v.first),
               ),
             ),
+            const SizedBox(height: 20),
+            Text(t('disp.color'), style: TextStyle(color: slate)),
+            const SizedBox(height: 8),
+            Row(children: [
+              for (final e in accents.entries)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 14),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => state.setAccent(e.key),
+                    child: Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(colors: [e.value[0], e.value[0], e.value[2], e.value[2]], stops: const [0, 0.55, 0.55, 1], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                        border: Border.all(color: state.accent == e.key ? ink : line, width: state.accent == e.key ? 3 : 1),
+                      ),
+                      child: state.accent == e.key ? const Icon(Icons.check, color: Colors.white) : null,
+                    ),
+                  ),
+                ),
+            ]),
             const SizedBox(height: 20),
             Row(children: [
               Text(t('disp.zoom'), style: TextStyle(color: slate)),
@@ -377,7 +416,7 @@ class _PinScreenState extends State<PinScreen> {
               Text(t('pin.title'), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               Text(pin.isEmpty ? '      ' : List.filled(pin.length, '●').join(' '),
-                  style: const TextStyle(fontSize: 28, letterSpacing: 4, color: cedar)),
+                  style: TextStyle(fontSize: 28, letterSpacing: 4, color: cedar)),
               SizedBox(height: 44, child: note),
               for (final row in [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9']])
                 Directionality(
@@ -474,7 +513,7 @@ class _SellScreenState extends State<SellScreen> {
                             style: TextStyle(color: slate, fontSize: 18)))
                         : GridView.builder(
                             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 190, mainAxisExtent: 112, crossAxisSpacing: 12, mainAxisSpacing: 12),
+                                maxCrossAxisExtent: 190, mainAxisExtent: 168, crossAxisSpacing: 12, mainAxisSpacing: 12),
                             itemCount: shown.length,
                             itemBuilder: (_, i) => _tile(shown[i]),
                           ),
@@ -512,21 +551,34 @@ class _SellScreenState extends State<SellScreen> {
 
   Widget _tile(Product p) {
     final inCart = s.cart.where((l) => l.product.id == p.id).fold<int>(0, (a, l) => a + l.qty);
+    final bytes = p.imageBytes;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () { s.add(p); searchFocus.requestFocus(); },
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: surface, borderRadius: BorderRadius.circular(16),
           border: Border.all(color: inCart > 0 ? cedar : line, width: inCart > 0 ? 2 : 1),
         ),
         child: Stack(children: [
-          Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            CircleAvatar(radius: 16, backgroundColor: okBg,
-                child: Text(p.name.substring(0, 1).toUpperCase(), style: const TextStyle(color: cedarDeep, fontWeight: FontWeight.w700))),
-            Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            Text(usd(p.priceCents), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: cedar)),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SizedBox.expand(
+                  child: bytes != null
+                      ? Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true)
+                      : Container(
+                          color: okBg, alignment: Alignment.center,
+                          child: Text(p.name.substring(0, 1).toUpperCase(), style: TextStyle(color: dark(context) ? cedarLight : cedarDeep, fontSize: 30, fontWeight: FontWeight.w700)),
+                        ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            Text(usd(p.priceCents), style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: dark(context) ? cedarLight : cedar)),
           ]),
           if (inCart > 0)
             PositionedDirectional(

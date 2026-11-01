@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from '../auth';
 import { LangSwitch, t } from '../i18n';
+import { AccentPicker } from '../accent';
 
 const icons: Record<string, ReactNode> = {
   dashboard: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1" /><rect x="14" y="3" width="7" height="5" rx="1" /><rect x="14" y="12" width="7" height="9" rx="1" /><rect x="3" y="16" width="7" height="5" rx="1" /></svg>,
@@ -34,6 +35,7 @@ export function Layout() {
           <span>{me?.name}</span>
           <button className="btn btn-ghost" style={{ color: '#C9D4D0', height: 36, padding: 0, textAlign: 'start' }} onClick={signOut}>{t('Sign out')}</button>
           <LangSwitch style={{ color: '#C9D4D0', height: 36, padding: 0, textAlign: 'start' }} />
+          <AccentPicker light />
         </div>
       </nav>
       <div className="main-col"><Outlet /></div>

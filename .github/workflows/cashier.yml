@@ -30,6 +30,8 @@ jobs:
           sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application android:usesCleartextTraffic="true"#' "$f"
           sed -i 's#android:label="[^"]*"#android:label="Nabd Cashier"#' "$f"
       - run: flutter pub get
+      - name: App icon
+        run: dart run flutter_launcher_icons
       - run: flutter analyze
         continue-on-error: true
       - run: rm -f test/widget_test.dart && flutter test

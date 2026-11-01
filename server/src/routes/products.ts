@@ -9,12 +9,13 @@ const productBody = z.object({
   priceCents: z.number().int().min(0).max(100_000_00),
   vatBp: z.number().int().min(0).max(10000).default(1100),
   reorderLevel: z.number().int().min(0).default(0),
-  active: z.boolean().default(true)
+  active: z.boolean().default(true),
+  image: z.string().max(150000).regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/).nullable().optional()
 });
 
 const select = `
   select p.id, p.name, p.barcode, p.category_id as "categoryId", c.name as category,
-         p.price_cents as "priceCents", p.vat_bp as "vatBp", p.reorder_level as "reorderLevel", p.active,
+         p.price_cents as "priceCents", p.vat_bp as "vatBp", p.reorder_level as "reorderLevel", p.active, p.image,
          coalesce((select sum(qty) from stock s where s.product_id = p.id), 0)::int as stock
     from products p left join categories c on c.id = p.category_id`;
 
@@ -57,10 +58,10 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
   app.post('/products', { preHandler: app.requirePerm('manage_products') }, async (req, reply) => {
     const b = productBody.parse(req.body);
     const r = await app.pool.query(
-      'insert into products (name, barcode, category_id, price_cents, vat_bp, reorder_level, active) values ($1,$2,$3,$4,$5,$6,$7) returning id',
-      [b.name, b.barcode ?? null, b.categoryId ?? null, b.priceCents, b.vatBp, b.reorderLevel, b.active]
+      'insert into products (name, barcode, category_id, price_cents, vat_bp, reorder_level, active, image) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id',
+      [b.name, b.barcode ?? null, b.categoryId ?? null, b.priceCents, b.vatBp, b.reorderLevel, b.active, b.image ?? null]
     );
-    await app.pool.query('insert into audit_log (user_id, action, entity, entity_id, detail) values ($1, $2, $3, $4, $5)', [req.auth.id, 'create', 'product', r.rows[0].id, JSON.stringify(b)]);
+    await app.pool.query('insert into audit_log (user_id, action, entity, entity_id, detail) values ($1, $2, $3, $4, $5)', [req.auth.id, 'create', 'product', r.rows[0].id, JSON.stringify({ ...b, image: b.image ? '(picture)' : null })]);
     return reply.code(201).send((await app.pool.query(`${select} where p.id = $1`, [r.rows[0].id])).rows[0]);
   });
 
@@ -73,7 +74,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const priceOnly = keys.every((k) => k === 'priceCents');
     if (!canProducts && !(canPrices && priceOnly)) throw new HttpError(403, 'Your role can change prices only.');
     if (b.priceCents !== undefined && !canPrices) throw new HttpError(403, 'Your role does not allow price changes.');
-    const cols: Record<string, string> = { name: 'name', barcode: 'barcode', categoryId: 'category_id', priceCents: 'price_cents', vatBp: 'vat_bp', reorderLevel: 'reorder_level', active: 'active' };
+    const cols: Record<string, string> = { name: 'name', barcode: 'barcode', categoryId: 'category_id', priceCents: 'price_cents', vatBp: 'vat_bp', reorderLevel: 'reorder_level', active: 'active', image: 'image' };
     const sets: string[] = [];
     const args: unknown[] = [];
     for (const k of keys) {
@@ -84,7 +85,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     args.push(id);
     const r = await app.pool.query(`update products set ${sets.join(', ')}, updated_at = now() where id = $${args.length} returning id`, args);
     if (!r.rows[0]) throw new HttpError(404, 'That product does not exist.');
-    await app.pool.query('insert into audit_log (user_id, action, entity, entity_id, detail) values ($1, $2, $3, $4, $5)', [req.auth.id, 'update', 'product', id, JSON.stringify(b)]);
+    await app.pool.query('insert into audit_log (user_id, action, entity, entity_id, detail) values ($1, $2, $3, $4, $5)', [req.auth.id, 'update', 'product', id, JSON.stringify({ ...b, image: b.image ? '(picture)' : b.image })]);
     return (await app.pool.query(`${select} where p.id = $1`, [id])).rows[0];
   });
 

@@ -35,7 +35,7 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
 }
 
 export interface Me { id: string; name: string; roleId: string; storeId: string | null; permissions: string[] }
-export interface Product { id: string; name: string; barcode: string | null; categoryId: string | null; category: string | null; priceCents: number; vatBp: number; reorderLevel: number; active: boolean; stock: number }
+export interface Product { id: string; name: string; barcode: string | null; categoryId: string | null; category: string | null; priceCents: number; vatBp: number; reorderLevel: number; active: boolean; stock: number; image: string | null }
 export interface Category { id: string; name: string }
 export interface StoreRow { id: string; code: string; name: string; tills: number; tillsOnline: number; waiting: number; salesTodayCents: number }
 export interface TillRow { id: string; name: string; storeId: string; store: string; appVersion: string | null; lastSyncAt: string | null; queuedSales: number; online: boolean }

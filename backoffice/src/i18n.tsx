@@ -51,6 +51,9 @@ export function LangSwitch({ style }: { style?: React.CSSProperties }) {
 }
 
 const AR: Record<string, string> = {
+  'Color': 'اللون', 'Green': 'أخضر', 'Blue': 'أزرق', 'Red': 'أحمر', 'Purple': 'بنفسجي',
+  'Product picture': 'صورة المنتج', 'Change picture': 'تغيير الصورة', 'Add picture': 'إضافة صورة', 'Remove picture': 'إزالة الصورة',
+  'That file could not be used as a picture.': 'تعذّر استخدام هذا الملف كصورة.',
   // general
   'Something went wrong.': 'حدث خطأ ما.',
   'Cannot reach the server. Check your connection and try again.': 'تعذّر الوصول إلى الخادم. تحقق من الاتصال وحاول مجدداً.',

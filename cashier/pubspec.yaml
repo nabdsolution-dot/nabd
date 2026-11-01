@@ -1,7 +1,7 @@
 name: nabd_cashier
 description: Nabd cashier app - sells offline-first and syncs to the Nabd server.
 publish_to: none
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -20,6 +20,14 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
 
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#0E5A48"
+  adaptive_icon_foreground: "assets/icon/icon_fg.png"

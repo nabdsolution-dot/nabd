@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 class Product {
   Product({
     required this.id,
@@ -6,6 +9,7 @@ class Product {
     required this.category,
     required this.priceCents,
     required this.vatBp,
+    this.image,
   });
 
   final String id;
@@ -15,6 +19,26 @@ class Product {
   final int priceCents;
   final int vatBp;
 
+  /// A small picture as a data URL, or null.
+  final String? image;
+  Uint8List? _bytes;
+  bool _decoded = false;
+
+  Uint8List? get imageBytes {
+    if (!_decoded) {
+      _decoded = true;
+      final i = image;
+      if (i != null && i.contains(',')) {
+        try {
+          _bytes = base64Decode(i.substring(i.indexOf(',') + 1));
+        } catch (_) {
+          _bytes = null;
+        }
+      }
+    }
+    return _bytes;
+  }
+
   factory Product.fromJson(Map<String, dynamic> j) => Product(
         id: j['id'] as String,
         name: j['name'] as String,
@@ -22,6 +46,7 @@ class Product {
         category: (j['category'] as String?) ?? 'Other',
         priceCents: (j['priceCents'] as num).toInt(),
         vatBp: (j['vatBp'] as num).toInt(),
+        image: j['image'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -31,6 +56,7 @@ class Product {
         'category': category,
         'priceCents': priceCents,
         'vatBp': vatBp,
+        'image': image,
       };
 }
 

@@ -7,6 +7,7 @@ import { lbp, parseUsdToCents, usd } from '../format';
 import * as S from './store';
 import type { Sale, SaleLookup } from './store';
 import './till.css';
+import { AccentPicker } from '../accent';
 
 const useStore = () => useSyncExternalStore(S.subscribe, S.getState);
 
@@ -67,6 +68,7 @@ function SignIn() {
   return (
     <div className="tl-center"><div className="tl-card">
       <div className="tl-top"><strong>{cfg!.storeName} · {cfg!.tillName}</strong><LangSwitch /></div>
+      <AccentPicker />
       {err && <p role="alert" className="tl-err">{err}</p>}
       <PinPad title={busy ? t('Signing in…') : t('Enter your PIN')} onDone={async (pin) => {
         setBusy(true); setErr('');
@@ -238,7 +240,8 @@ function Register() {
         <span className="tl-grow" />
         <button className="tl-btn sm" onClick={() => setModal('returns')}>{t('Return')}</button>
         <button className="tl-btn sm" onClick={() => setModal('shift')}>{t('Shift')}</button>
-        <LangSwitch />
+        <LangSwitch style={{ color: '#C9D4D0' }} />
+        <AccentPicker light />
         <button className="tl-btn sm" onClick={S.signOut}>{st.me?.name} · {t('Sign out')}</button>
       </header>
       <main className="tl-main">
@@ -247,7 +250,9 @@ function Register() {
           {note && <p role="alert" className="tl-err">{note}</p>}
           {st.syncMessage && <p role="status" className="tl-err">{st.syncMessage}</p>}
           <div className="tl-grid">
-            {list.map((p: Product) => <button key={p.id} className="tl-tile" onClick={() => S.addProduct(p)}><span>{p.name}</span><b>{usd(p.priceCents)}</b></button>)}
+            {list.map((p: Product) => <button key={p.id} className="tl-tile" onClick={() => S.addProduct(p)}>
+              {p.image ? <img src={p.image} alt="" loading="lazy" /> : <span className="tl-ph" aria-hidden="true">{p.name.slice(0, 1).toUpperCase()}</span>}
+              <span>{p.name}</span><b>{usd(p.priceCents)}</b></button>)}
             {list.length === 0 && <p>{st.products.length === 0 ? t('No products loaded yet. Connect to the server once.') : t('Nothing found.')}</p>}
           </div>
         </section>

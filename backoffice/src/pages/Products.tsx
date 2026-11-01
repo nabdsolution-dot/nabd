@@ -7,6 +7,21 @@ import { api, type Category, type Product } from '../api';
 import { lbp, parseUsdToCents, usd } from '../format';
 import { errText, t } from '../i18n';
 
+/** Crops to a square and shrinks to 192 px, so a phone photo becomes about 10 KB. */
+async function shrinkImage(file: File): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error('bad image')); i.src = url; });
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const c = document.createElement('canvas'); c.width = 192; c.height = 192;
+    const g = c.getContext('2d');
+    if (!g) throw new Error('no canvas');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, 192, 192);
+    g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 192, 192);
+    return c.toDataURL('image/jpeg', 0.72);
+  } finally { URL.revokeObjectURL(url); }
+}
+
 interface List { items: Product[]; total: number; page: number; limit: number }
 const LIMIT = 10;
 
@@ -62,7 +77,7 @@ export function Products() {
                       {list.data.items.length === 0 && <tr><td colSpan={5} className="muted">{t('No product matches. Check the spelling or clear the filters.')}</td></tr>}
                       {list.data.items.map((p) => (
                         <tr key={p.id} className={'selectable' + (selected !== 'new' && selected?.id === p.id ? ' selected' : '')} onClick={() => setSelected(p)}>
-                          <td className="strong"><button className="btn-ghost" style={{ all: 'unset', cursor: 'pointer', fontWeight: 600 }} onClick={() => setSelected(p)}>{p.name}</button>{!p.active && <> <Pill kind="neutral">{t('Inactive')}</Pill></>}</td>
+                          <td className="strong"><button className="btn-ghost" style={{ all: 'unset', cursor: 'pointer', fontWeight: 600 }} onClick={() => setSelected(p)}>{p.image ? <img className="thumb" src={p.image} alt="" /> : <span className="thumb thumb-ph" aria-hidden="true">{p.name.slice(0, 1).toUpperCase()}</span>}{p.name}</button>{!p.active && <> <Pill kind="neutral">{t('Inactive')}</Pill></>}</td>
                           <td className="muted num" style={{ textAlign: 'start' }} dir="ltr">{p.barcode}</td>
                           <td className="muted">{p.category}</td>
                           <td className="num">{usd(p.priceCents)}</td>
@@ -106,6 +121,8 @@ function ProductPanel({ product, categories, rate, canProducts, canPrices, onClo
   const [vat, setVat] = useState(product ? String(product.vatBp / 100) : '11');
   const [reorder, setReorder] = useState(product ? String(product.reorderLevel) : '0');
   const [active, setActive] = useState(product?.active ?? true);
+  const [image, setImage] = useState<string | null>(product?.image ?? null);
+  const [imgErr, setImgErr] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
@@ -130,7 +147,7 @@ function ProductPanel({ product, categories, rate, canProducts, canPrices, onClo
     try {
       const body = priceOnly ? { priceCents } : {
         name: name.trim(), barcode: barcode.trim() || null, categoryId: categoryId || null,
-        priceCents, vatBp: Math.round(vatNum * 100), reorderLevel: reorderNum, active
+        priceCents, vatBp: Math.round(vatNum * 100), reorderLevel: reorderNum, active, image
       };
       const p = product
         ? await api<Product>('PATCH', '/products/' + product.id, body)
@@ -153,6 +170,24 @@ function ProductPanel({ product, categories, rate, canProducts, canPrices, onClo
         {error && <Banner kind="error">{error}</Banner>}
         {saved && <Banner kind="success">{t('Saved. Tills pick this up on their next sync.')}</Banner>}
         <Field id="p-name" label={t('Name')} error={fieldErr.name}><input id="p-name" className="input" value={name} onChange={(e) => setName(e.target.value)} disabled={priceOnly || readOnly} /></Field>
+        <div className="pic">
+          {image ? <img src={image} alt={t('Product picture')} /> : <span className="pic-ph" aria-hidden="true">{(name || '?').slice(0, 1).toUpperCase()}</span>}
+          {!priceOnly && !readOnly && (
+            <div style={{ display: 'grid', gap: 6 }}>
+              <label className="btn" style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', height: 40 }}>
+                {image ? t('Change picture') : t('Add picture')}
+                <input type="file" accept="image/*" className="sr-only" onChange={async (e) => {
+                  const f = e.target.files?.[0]; e.target.value = '';
+                  if (!f) return;
+                  setImgErr('');
+                  try { setImage(await shrinkImage(f)); } catch { setImgErr(t('That file could not be used as a picture.')); }
+                }} />
+              </label>
+              {image && <button type="button" className="btn btn-ghost" style={{ height: 32, padding: 0, textAlign: 'start' }} onClick={() => setImage(null)}>{t('Remove picture')}</button>}
+              {imgErr && <span className="hint" role="alert">{imgErr}</span>}
+            </div>
+          )}
+        </div>
         <div className="fields">
           <Field id="p-barcode" label={t('Barcode')}><input id="p-barcode" className="input" value={barcode} onChange={(e) => setBarcode(e.target.value)} disabled={priceOnly || readOnly} /></Field>
           <Field id="p-cat" label={t('Category')}>

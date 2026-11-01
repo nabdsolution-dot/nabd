@@ -8,7 +8,7 @@ import 'api.dart';
 import 'models.dart';
 import 'strings.dart';
 
-const appVersion = '1.1.0';
+const appVersion = '1.2.0';
 
 class AppState extends ChangeNotifier {
   late SharedPreferences _prefs;
@@ -23,6 +23,7 @@ class AppState extends ChangeNotifier {
   String lang = 'en';
   String themeMode = 'system'; // system | light | dark
   double zoom = 1.0;
+  String accent = 'green';
   String? updateVersion; // set when the server knows a newer app version
   String updateUrl = '';
   bool updateDismissed = false;
@@ -57,6 +58,7 @@ class AppState extends ChangeNotifier {
     lbpRate = _prefs.getInt('lbpRate') ?? 89500;
     lang = _prefs.getString('lang') ?? 'en';
     themeMode = _prefs.getString('themeMode') ?? 'system';
+    accent = _prefs.getString('accent') ?? 'green';
     zoom = (_prefs.getDouble('zoom') ?? 1.0).clamp(0.7, 1.8);
     currentLang = lang;
     queue = _readList('queue');
@@ -205,6 +207,12 @@ class AppState extends ChangeNotifier {
   Future<void> setThemeMode(String m) async {
     themeMode = m;
     await _prefs.setString('themeMode', m);
+    notifyListeners();
+  }
+
+  Future<void> setAccent(String a) async {
+    accent = a;
+    await _prefs.setString('accent', a);
     notifyListeners();
   }
 

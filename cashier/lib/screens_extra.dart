@@ -86,7 +86,7 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
               FilledButton(onPressed: busy ? null : find, child: Text(t('ret.find'))),
             ]),
             if (error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(error!, style: const TextStyle(color: alertRed, fontSize: 16))),
-            if (done != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(done!, style: const TextStyle(color: cedar, fontSize: 17, fontWeight: FontWeight.w600))),
+            if (done != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(done!, style: TextStyle(color: cedar, fontSize: 17, fontWeight: FontWeight.w600))),
             if (sale != null) ...[
               const SizedBox(height: 16),
               for (final l in lines)
@@ -239,7 +239,7 @@ class _ShiftScreenState extends State<ShiftScreen> {
               ? const Center(child: CircularProgressIndicator())
               : Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
                   if (error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(error!, style: const TextStyle(color: alertRed, fontSize: 16))),
-                  if (done != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(done!, style: const TextStyle(color: cedar, fontSize: 17, fontWeight: FontWeight.w600))),
+                  if (done != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(done!, style: TextStyle(color: cedar, fontSize: 17, fontWeight: FontWeight.w600))),
                   if (sh == null) ...[
                     Text(t('shift.none'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 14),
