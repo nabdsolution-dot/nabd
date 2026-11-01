@@ -11,17 +11,42 @@ import 'strings.dart';
 const cedar = Color(0xFF0E5A48);
 const cedarDeep = Color(0xFF0B4A3B);
 const saffron = Color(0xFFF0A500);
-const ink = Color(0xFF12201C);
-const mist = Color(0xFFF2F4F1);
-const slate = Color(0xFF55655F);
-const line = Color(0xFFD5DCD9);
-const waiting = Color(0xFFFFF1CC);
+const onSaffron = Color(0xFF12201C); // dark text that sits on the saffron buttons in both themes
 const alertRed = Color(0xFFB3261E);
+
+// These follow the theme. The app rebuilds from the top when the theme changes, so plain variables are enough.
+Color ink = const Color(0xFF12201C);
+Color mist = const Color(0xFFF2F4F1);
+Color slate = const Color(0xFF55655F);
+Color line = const Color(0xFFD5DCD9);
+Color waiting = const Color(0xFFFFF1CC);
+Color surface = Colors.white;
+Color okBg = const Color(0xFFDDF1E8);
+
+void applyPalette(bool dark) {
+  if (dark) {
+    ink = const Color(0xFFE8EEEB);
+    mist = const Color(0xFF0F1B18);
+    slate = const Color(0xFFA3B3AD);
+    line = const Color(0xFF2F433D);
+    waiting = const Color(0xFF4A3A10);
+    surface = const Color(0xFF182824);
+    okBg = const Color(0xFF14392D);
+  } else {
+    ink = const Color(0xFF12201C);
+    mist = const Color(0xFFF2F4F1);
+    slate = const Color(0xFF55655F);
+    line = const Color(0xFFD5DCD9);
+    waiting = const Color(0xFFFFF1CC);
+    surface = Colors.white;
+    okBg = const Color(0xFFDDF1E8);
+  }
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations(
-      [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+  // Every orientation is allowed; the layouts adapt to the screen shape.
+  SystemChrome.setPreferredOrientations(DeviceOrientation.values);
   runApp(const NabdCashierApp());
 }
 
@@ -31,50 +56,151 @@ class NabdCashierApp extends StatefulWidget {
   State<NabdCashierApp> createState() => _NabdCashierAppState();
 }
 
-class _NabdCashierAppState extends State<NabdCashierApp> {
+class _NabdCashierAppState extends State<NabdCashierApp> with WidgetsBindingObserver {
   final state = AppState();
+
+  @override
+  void didChangePlatformBrightness() => setState(() {});
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     state.init();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Rebuilds the whole app when the language changes, so direction and text both flip.
+    // Rebuilds the whole app when language, theme or zoom changes, so direction, colors and size all follow.
     return ListenableBuilder(
       listenable: state,
-      builder: (context, _) => MaterialApp(
-        title: 'Nabd Cashier',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(seedColor: cedar, primary: cedar, secondary: saffron),
-          scaffoldBackgroundColor: mist,
-        ),
-        builder: (context, child) => Directionality(
-          textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-          child: child ?? const SizedBox.shrink(),
-        ),
-        home: Builder(builder: (context) {
-          if (!state.ready) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-          if (!state.configured) return SetupScreen(state: state);
-          if (!state.signedIn) return PinScreen(state: state);
-          return SellScreen(state: state);
-        }),
-      ),
+      builder: (context, _) {
+        final dark = state.themeMode == 'dark' ||
+            (state.themeMode == 'system' && WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark);
+        applyPalette(dark);
+        final scheme = ColorScheme.fromSeed(
+          seedColor: cedar, primary: dark ? const Color(0xFF3FB992) : cedar, secondary: saffron,
+          brightness: dark ? Brightness.dark : Brightness.light,
+        );
+        return MaterialApp(
+          key: ValueKey('$dark-$currentLang'),
+          title: 'Nabd Cashier',
+          debugShowCheckedModeBanner: false,
+          themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+          theme: ThemeData(useMaterial3: true, colorScheme: scheme, scaffoldBackgroundColor: mist),
+          darkTheme: ThemeData(useMaterial3: true, colorScheme: scheme, scaffoldBackgroundColor: mist),
+          builder: (context, child) {
+            final mq = MediaQuery.of(context);
+            final z = state.zoom;
+            Widget body = child ?? const SizedBox.shrink();
+            if ((z - 1.0).abs() > 0.001) {
+              // Real zoom: lay the app out on a smaller (or larger) virtual screen, then scale it to fit.
+              final w = mq.size.width / z, h = mq.size.height / z;
+              body = MediaQuery(
+                data: mq.copyWith(size: Size(w, h), padding: mq.padding / z, viewPadding: mq.viewPadding / z, viewInsets: mq.viewInsets / z),
+                child: ClipRect(
+                  child: Transform.scale(
+                    scale: z, alignment: Alignment.topLeft,
+                    child: OverflowBox(minWidth: w, maxWidth: w, minHeight: h, maxHeight: h, alignment: Alignment.topLeft, child: body),
+                  ),
+                ),
+              );
+            }
+            return Directionality(textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr, child: body);
+          },
+          home: Builder(builder: (context) {
+            if (!state.ready) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            if (!state.configured) return SetupScreen(state: state);
+            if (!state.signedIn) return PinScreen(state: state);
+            return SellScreen(state: state);
+          }),
+        );
+      },
     );
   }
 }
 
 ButtonStyle saffronButton() => FilledButton.styleFrom(
       backgroundColor: saffron,
-      foregroundColor: ink,
+      foregroundColor: onSaffron,
       minimumSize: const Size.fromHeight(60),
       textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     );
+
+Widget displayButton(BuildContext context, AppState s) => IconButton(
+      tooltip: t('disp.title'),
+      icon: const Icon(Icons.tune),
+      onPressed: () => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => DisplaySheet(state: s),
+      ),
+    );
+
+class DisplaySheet extends StatelessWidget {
+  const DisplaySheet({super.key, required this.state});
+  final AppState state;
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: state,
+      builder: (context, _) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(t('disp.title'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+            Text(t('disp.theme'), style: TextStyle(color: slate)),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(value: 'system', icon: const Icon(Icons.brightness_auto), label: Text(t('disp.system'))),
+                  ButtonSegment(value: 'light', icon: const Icon(Icons.light_mode), label: Text(t('disp.light'))),
+                  ButtonSegment(value: 'dark', icon: const Icon(Icons.dark_mode), label: Text(t('disp.dark'))),
+                ],
+                selected: {state.themeMode},
+                onSelectionChanged: (v) => state.setThemeMode(v.first),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(children: [
+              Text(t('disp.zoom'), style: TextStyle(color: slate)),
+              const Spacer(),
+              Text('${(state.zoom * 100).round()}%', style: const TextStyle(fontWeight: FontWeight.w700)),
+            ]),
+            Row(children: [
+              IconButton.outlined(onPressed: () => state.setZoom(state.zoom - 0.1), icon: const Icon(Icons.zoom_out)),
+              Expanded(
+                child: Slider(
+                  min: 0.7, max: 1.8, divisions: 11,
+                  value: state.zoom.clamp(0.7, 1.8),
+                  onChanged: (v) => state.setZoom(v),
+                ),
+              ),
+              IconButton.outlined(onPressed: () => state.setZoom(state.zoom + 0.1), icon: const Icon(Icons.zoom_in)),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              TextButton(onPressed: () => state.setZoom(1.0), child: Text(t('disp.reset'))),
+              const Spacer(),
+              FilledButton(onPressed: () => Navigator.pop(context), child: Text(t('disp.done'))),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
 
 Widget langButton(AppState s) =>
     TextButton(onPressed: () => s.setLang(isArabic ? 'en' : 'ar'), child: Text(t('lang.switch')));
@@ -98,16 +224,18 @@ class _SetupScreenState extends State<SetupScreen> {
       body: Center(
         child: SingleChildScrollView(
           child: Container(
-            width: 520,
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+            constraints: const BoxConstraints(maxWidth: 520),
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(24)),
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 Expanded(child: Text(t('setup.title'), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700))),
+                displayButton(context, widget.state),
                 langButton(widget.state),
               ]),
               const SizedBox(height: 8),
-              Text(t('setup.help'), style: const TextStyle(color: slate, fontSize: 16)),
+              Text(t('setup.help'), style: TextStyle(color: slate, fontSize: 16)),
               const SizedBox(height: 20),
               TextField(controller: url, textDirection: TextDirection.ltr, decoration: InputDecoration(labelText: t('setup.server'), border: const OutlineInputBorder())),
               const SizedBox(height: 14),
@@ -174,7 +302,7 @@ class _PinScreenState extends State<PinScreen> {
             width: 84, height: 72,
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                backgroundColor: Colors.white,
+                backgroundColor: surface,
                 foregroundColor: ink,
                 textStyle: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -188,20 +316,20 @@ class _PinScreenState extends State<PinScreen> {
     if (error != null) {
       note = Text(error!, style: const TextStyle(color: alertRed, fontSize: 16), textAlign: TextAlign.center);
     } else if (widget.state.syncMessage != null) {
-      note = Text(widget.state.syncMessage!, style: const TextStyle(color: slate));
+      note = Text(widget.state.syncMessage!, style: TextStyle(color: slate));
     } else if (waitingCount > 0) {
-      note = Text(t('pin.waiting', {'n': '$waitingCount'}), style: const TextStyle(color: slate));
+      note = Text(t('pin.waiting', {'n': '$waitingCount'}), style: TextStyle(color: slate));
     }
     return Scaffold(
       body: Stack(children: [
-        PositionedDirectional(top: 12, end: 16, child: langButton(widget.state)),
+        PositionedDirectional(top: 12, end: 16, child: Row(children: [displayButton(context, widget.state), langButton(widget.state)])),
         Center(
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
                 width: 56, height: 56, alignment: Alignment.center,
                 decoration: BoxDecoration(color: saffron, borderRadius: BorderRadius.circular(16)),
-                child: const Text('N', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: ink)),
+                child: const Text('N', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: onSaffron)),
               ),
               const SizedBox(height: 12),
               Text(t('pin.title'), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
@@ -224,7 +352,7 @@ class _PinScreenState extends State<PinScreen> {
               ),
               TextButton(
                 onPressed: () => widget.state.resetSetup(),
-                child: Text(t('pin.change'), style: const TextStyle(color: slate)),
+                child: Text(t('pin.change'), style: TextStyle(color: slate)),
               ),
             ]),
           ),
@@ -273,13 +401,7 @@ class _SellScreenState extends State<SellScreen> {
       return p.name.toLowerCase().contains(q) || (p.barcode ?? '').contains(q);
     }).toList();
 
-    return Scaffold(
-      body: Column(children: [
-        _header(),
-        Expanded(
-          child: Row(children: [
-            Expanded(
-              child: Padding(
+    final products = Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   TextField(
@@ -291,8 +413,8 @@ class _SellScreenState extends State<SellScreen> {
                     decoration: InputDecoration(
                       hintText: t('sell.search'),
                       prefixIcon: const Icon(Icons.search),
-                      filled: true, fillColor: Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: line)),
+                      filled: true, fillColor: surface,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: line)),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -307,7 +429,7 @@ class _SellScreenState extends State<SellScreen> {
                   Expanded(
                     child: shown.isEmpty
                         ? Center(child: Text(s.products.isEmpty ? t('sell.empty') : t('sell.nomatch'),
-                            style: const TextStyle(color: slate, fontSize: 18)))
+                            style: TextStyle(color: slate, fontSize: 18)))
                         : GridView.builder(
                             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                                 maxCrossAxisExtent: 190, mainAxisExtent: 112, crossAxisSpacing: 12, mainAxisSpacing: 12),
@@ -316,10 +438,20 @@ class _SellScreenState extends State<SellScreen> {
                           ),
                   ),
                 ]),
-              ),
-            ),
-            _cartPanel(),
-          ]),
+    );
+    return Scaffold(
+      body: Column(children: [
+        _header(),
+        Expanded(
+          child: LayoutBuilder(builder: (context, c) {
+            if (c.maxWidth >= 820) {
+              return Row(children: [Expanded(child: products), _cartPanel(true)]);
+            }
+            return Column(children: [
+              Expanded(flex: 5, child: products),
+              Expanded(flex: 6, child: _cartPanel(false)),
+            ]);
+          }),
         ),
       ]),
     );
@@ -330,8 +462,8 @@ class _SellScreenState extends State<SellScreen> {
         child: ChoiceChip(
           label: Text(label, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: on ? Colors.white : ink)),
           selected: on, onSelected: (_) => onTap(),
-          selectedColor: cedar, backgroundColor: Colors.white, showCheckmark: false,
-          side: const BorderSide(color: line),
+          selectedColor: cedar, backgroundColor: surface, showCheckmark: false,
+          side: BorderSide(color: line),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         ),
       );
@@ -344,12 +476,12 @@ class _SellScreenState extends State<SellScreen> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(16),
+          color: surface, borderRadius: BorderRadius.circular(16),
           border: Border.all(color: inCart > 0 ? cedar : line, width: inCart > 0 ? 2 : 1),
         ),
         child: Stack(children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            CircleAvatar(radius: 16, backgroundColor: const Color(0xFFDDF1E8),
+            CircleAvatar(radius: 16, backgroundColor: okBg,
                 child: Text(p.name.substring(0, 1).toUpperCase(), style: const TextStyle(color: cedarDeep, fontWeight: FontWeight.w700))),
             Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             Text(usd(p.priceCents), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: cedar)),
@@ -375,123 +507,142 @@ class _SellScreenState extends State<SellScreen> {
         ? t('status.synced')
         : (isOnline ? t('status.online_waiting', {'n': '$n'}) : t('status.offline_waiting', {'n': '$n'}));
     return Container(
-      height: 64, padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: line))),
-      child: Row(children: [
-        Container(
-          width: 36, height: 36, alignment: Alignment.center,
-          decoration: BoxDecoration(color: saffron, borderRadius: BorderRadius.circular(10)),
-          child: const Text('N', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-        ),
-        const SizedBox(width: 12),
-        Text(t('sell.title'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-        const SizedBox(width: 16),
-        TextButton.icon(
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ReturnsScreen(state: s))),
-          icon: const Icon(Icons.undo), label: Text(t('nav.returns')),
-        ),
-        TextButton.icon(
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ShiftScreen(state: s))),
-          icon: const Icon(Icons.access_time), label: Text(t('nav.shift')),
-        ),
-        const Spacer(),
-        InkWell(
-          onTap: () => s.sync(),
-          borderRadius: BorderRadius.circular(22),
-          child: Container(
-            height: 40, padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: isOnline && n == 0 ? const Color(0xFFDDF1E8) : waiting,
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: Row(children: [
-              Icon(Icons.circle, size: 10, color: isOnline && n == 0 ? const Color(0xFF1B8A6B) : const Color(0xFFC98A00)),
-              const SizedBox(width: 8),
-              Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+      height: 64, padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(color: surface, border: Border(bottom: BorderSide(color: line))),
+      child: LayoutBuilder(builder: (context, c) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: c.maxWidth, minHeight: 64),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Row(children: [
+              Container(
+                width: 36, height: 36, alignment: Alignment.center,
+                decoration: BoxDecoration(color: saffron, borderRadius: BorderRadius.circular(10)),
+                child: const Text('N', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: onSaffron)),
+              ),
+              const SizedBox(width: 12),
+              Text(t('sell.title'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+              const SizedBox(width: 16),
+              TextButton.icon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ReturnsScreen(state: s))),
+                icon: const Icon(Icons.undo), label: Text(t('nav.returns')),
+              ),
+              TextButton.icon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ShiftScreen(state: s))),
+                icon: const Icon(Icons.access_time), label: Text(t('nav.shift')),
+              ),
             ]),
-          ),
+            Row(children: [
+              const SizedBox(width: 16),
+              InkWell(
+                onTap: () => s.sync(),
+                borderRadius: BorderRadius.circular(22),
+                child: Container(
+                  height: 40, padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isOnline && n == 0 ? okBg : waiting,
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.circle, size: 10, color: isOnline && n == 0 ? const Color(0xFF1B8A6B) : const Color(0xFFC98A00)),
+                    const SizedBox(width: 8),
+                    Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  ]),
+                ),
+              ),
+              const SizedBox(width: 4),
+              displayButton(context, s),
+              langButton(s),
+              const SizedBox(width: 8),
+              Text(s.cashierName ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+              const SizedBox(width: 8),
+              TextButton(onPressed: s.signOut, child: Text(t('sell.signout'))),
+            ]),
+          ]),
         ),
-        const SizedBox(width: 8),
-        langButton(s),
-        const SizedBox(width: 8),
-        Text(s.cashierName ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-        const SizedBox(width: 8),
-        TextButton(onPressed: s.signOut, child: Text(t('sell.signout'))),
-      ]),
+      )),
     );
   }
 
-  Widget _cartPanel() {
+  Widget _cartPanel(bool wide) {
     final tt = s.totals;
-    return Container(
-      width: 400,
-      decoration: const BoxDecoration(color: Colors.white, border: BorderDirectional(start: BorderSide(color: line))),
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(20, 16, 12, 8),
-          child: Row(children: [
-            Text(t('sell.current'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-            const Spacer(),
-            if (s.cart.isNotEmpty) TextButton(onPressed: s.clearCart, child: Text(t('sell.clear'))),
-          ]),
-        ),
-        Expanded(
-          child: s.cart.isEmpty
-              ? Center(child: Text(t('sell.tap'), style: const TextStyle(color: slate, fontSize: 17)))
-              : ListView(children: [
-                  for (final l in s.cart)
-                    ListTile(
-                      title: Text(l.product.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
-                      subtitle: Text(t('sell.each', {'price': usd(l.product.priceCents)})),
-                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                        IconButton(onPressed: () => s.changeQty(l, -1), icon: const Icon(Icons.remove_circle_outline)),
-                        Text('${l.qty}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                        IconButton(onPressed: () => s.changeQty(l, 1), icon: const Icon(Icons.add_circle_outline)),
-                        SizedBox(width: 64, child: Text(usd(l.totalCents), textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.w600))),
-                      ]),
-                    ),
-                ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Row(children: [
-            Text(t('sell.discount'), style: const TextStyle(color: slate)),
-            const SizedBox(width: 12),
-            for (final p in [0, 5, if (s.canDiscount10) 10])
-              Padding(
-                padding: const EdgeInsetsDirectional.only(end: 8),
-                child: ChoiceChip(
-                  label: Text(p == 0 ? t('sell.none') : '$p%'),
-                  selected: s.discountPercent == p, onSelected: (_) => s.setDiscount(p),
-                ),
-              ),
-          ]),
-        ),
-        Container(
-          margin: const EdgeInsets.fromLTRB(16, 4, 16, 12), padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: cedarDeep, borderRadius: BorderRadius.circular(16)),
-          child: Column(children: [
-            _row(t('sell.subtotal'), usd(tt.subtotal)),
-            if (tt.discount > 0) _row(t('sell.discount'), '-${usd(tt.discount)}'),
-            _row(t('sell.vat'), usd(tt.vat)),
-            const SizedBox(height: 6),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text(t('sell.total'), style: const TextStyle(color: Colors.white, fontSize: 18)),
-              Text(usd(tt.total), style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w800)),
-            ]),
-            Align(alignment: AlignmentDirectional.centerEnd,
-                child: Text(lbp(tt.total, s.lbpRate), style: const TextStyle(color: Color(0xFFFFE08A), fontSize: 18, fontWeight: FontWeight.w600))),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: FilledButton(
-            style: saffronButton(),
-            onPressed: s.cart.isEmpty ? null : _pay,
-            child: Text(t('sell.pay')),
-          ),
-        ),
+    final header = Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(20, 16, 12, 8),
+      child: Row(children: [
+        Text(t('sell.current'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+        const Spacer(),
+        if (s.cart.isNotEmpty) TextButton(onPressed: s.clearCart, child: Text(t('sell.clear'))),
       ]),
+    );
+    final lines = <Widget>[
+      for (final l in s.cart)
+        ListTile(
+          title: Text(l.product.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+          subtitle: Text(t('sell.each', {'price': usd(l.product.priceCents)})),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            IconButton(onPressed: () => s.changeQty(l, -1), icon: const Icon(Icons.remove_circle_outline)),
+            Text('${l.qty}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            IconButton(onPressed: () => s.changeQty(l, 1), icon: const Icon(Icons.add_circle_outline)),
+            SizedBox(width: 64, child: Text(usd(l.totalCents), textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.w600))),
+          ]),
+        ),
+    ];
+    final empty = Center(child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Text(t('sell.tap'), style: TextStyle(color: slate, fontSize: 17)),
+    ));
+    final discount = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 4, children: [
+        Text(t('sell.discount'), style: TextStyle(color: slate)),
+        for (final p in [0, 5, if (s.canDiscount10) 10])
+          ChoiceChip(
+            label: Text(p == 0 ? t('sell.none') : '$p%'),
+            selected: s.discountPercent == p, onSelected: (_) => s.setDiscount(p),
+          ),
+      ]),
+    );
+    final totals = Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 12), padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cedarDeep, borderRadius: BorderRadius.circular(16)),
+      child: Column(children: [
+        _row(t('sell.subtotal'), usd(tt.subtotal)),
+        if (tt.discount > 0) _row(t('sell.discount'), '-${usd(tt.discount)}'),
+        _row(t('sell.vat'), usd(tt.vat)),
+        const SizedBox(height: 6),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text(t('sell.total'), style: const TextStyle(color: Colors.white, fontSize: 18)),
+          Text(usd(tt.total), style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.w800)),
+        ]),
+        Align(alignment: AlignmentDirectional.centerEnd,
+            child: Text(lbp(tt.total, s.lbpRate), style: const TextStyle(color: Color(0xFFFFE08A), fontSize: 18, fontWeight: FontWeight.w600))),
+      ]),
+    );
+    final pay = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: FilledButton(
+        style: saffronButton(),
+        onPressed: s.cart.isEmpty ? null : _pay,
+        child: Text(t('sell.pay')),
+      ),
+    );
+    return Container(
+      width: wide ? 400 : null,
+      decoration: BoxDecoration(
+        color: surface,
+        border: wide ? BorderDirectional(start: BorderSide(color: line)) : Border(top: BorderSide(color: line)),
+      ),
+      child: LayoutBuilder(builder: (context, c) {
+        // On a short screen the whole panel scrolls, so nothing is ever cut off.
+        if (c.maxHeight < 560) {
+          return ListView(children: [header, if (s.cart.isEmpty) empty else ...lines, discount, totals, pay]);
+        }
+        return Column(children: [
+          header,
+          Expanded(child: s.cart.isEmpty ? empty : ListView(children: lines)),
+          discount, totals, pay,
+        ]);
+      }),
     );
   }
 
@@ -510,13 +661,13 @@ class _SellScreenState extends State<SellScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(t('pay.title', {'amount': usd(tt.total)})),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(lbp(tt.total, s.lbpRate), style: const TextStyle(fontSize: 18, color: slate)),
+          Text(lbp(tt.total, s.lbpRate), style: TextStyle(fontSize: 18, color: slate)),
           const SizedBox(height: 20),
           for (final o in [['usd', t('pay.usd')], ['lbp', t('pay.lbp')], ['card', t('pay.card')]])
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: SizedBox(
-                width: 320, height: 60,
+                width: (MediaQuery.of(context).size.width - 140).clamp(160.0, 320.0), height: 60,
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(textStyle: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600)),
                   onPressed: () => Navigator.pop(ctx, o[0]),
@@ -540,7 +691,7 @@ class _SellScreenState extends State<SellScreen> {
           const SizedBox(height: 8),
           Text('${usd(sale['_total'] as int)}  (${lbp(sale['_total'] as int, s.lbpRate)})'),
           const SizedBox(height: 8),
-          Text(s.online ? t('done.uploading') : t('done.saved'), style: const TextStyle(color: slate)),
+          Text(s.online ? t('done.uploading') : t('done.saved'), style: TextStyle(color: slate)),
         ]),
         actions: [
           TextButton(

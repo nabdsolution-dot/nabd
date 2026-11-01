@@ -87,6 +87,14 @@ const _en = <String, String>{
   'shift.closed': 'Shift closed.',
   'shift.queue': '{n} sales are still waiting to upload. Connect and wait for sync before closing.',
   'lang.switch': 'العربية',
+  'disp.title': 'Display',
+  'disp.theme': 'Theme',
+  'disp.system': 'Auto',
+  'disp.light': 'Light',
+  'disp.dark': 'Dark',
+  'disp.zoom': 'Zoom',
+  'disp.reset': 'Reset',
+  'disp.done': 'Done',
   'err.generic': 'Something went wrong.',
 };
 
@@ -168,5 +176,13 @@ const _ar = <String, String>{
   'shift.closed': 'تم إغلاق الوردية.',
   'shift.queue': '{n} عمليات بيع لا تزال بانتظار الرفع. اتصل وانتظر المزامنة قبل الإغلاق.',
   'lang.switch': 'English',
+  'disp.title': 'العرض',
+  'disp.theme': 'المظهر',
+  'disp.system': 'تلقائي',
+  'disp.light': 'فاتح',
+  'disp.dark': 'داكن',
+  'disp.zoom': 'التكبير',
+  'disp.reset': 'إعادة ضبط',
+  'disp.done': 'تم',
   'err.generic': 'حدث خطأ ما.',
 };

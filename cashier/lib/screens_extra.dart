@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'api.dart';
 import 'app_state.dart';
-import 'main.dart' show cedar, saffronButton, slate, line, alertRed, waiting;
+import 'main.dart' show cedar, saffronButton, slate, line, alertRed, waiting, surface, okBg;
 import 'models.dart';
 import 'strings.dart';
 
@@ -13,9 +13,9 @@ String _err(Object e) {
 }
 
 Widget _card(Widget child) => Container(
-      width: 640,
+      constraints: const BoxConstraints(maxWidth: 640),
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: line)),
+      decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: line)),
       child: child,
     );
 
@@ -72,12 +72,12 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
   Widget build(BuildContext context) {
     final lines = ((sale?['lines'] as List?) ?? []).cast<Map>();
     return Scaffold(
-      appBar: AppBar(title: Text(t('ret.title')), backgroundColor: Colors.white),
+      appBar: AppBar(title: Text(t('ret.title')), backgroundColor: surface),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: _card(Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(t('ret.help'), style: const TextStyle(color: slate, fontSize: 16)),
+            Text(t('ret.help'), style: TextStyle(color: slate, fontSize: 16)),
             const SizedBox(height: 14),
             Row(children: [
               Expanded(child: TextField(controller: receipt, onSubmitted: (_) => find(),
@@ -105,7 +105,7 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
                   ]),
                 ),
               const Divider(),
-              Text(t('ret.refund_method'), style: const TextStyle(color: slate)),
+              Text(t('ret.refund_method'), style: TextStyle(color: slate)),
               const SizedBox(height: 6),
               Wrap(spacing: 8, children: [
                 for (final o in [['usd', t('pay.usd')], ['lbp', t('pay.lbp')], ['card', t('pay.card')]])
@@ -203,12 +203,12 @@ class _ShiftScreenState extends State<ShiftScreen> {
       decoration: BoxDecoration(border: Border.all(color: line), borderRadius: BorderRadius.circular(14)),
       child: Row(children: [
         Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-        Text('${t('shift.expected')}: $expected', style: const TextStyle(color: slate)),
+        Text('${t('shift.expected')}: $expected', style: TextStyle(color: slate)),
         if (counted != null) ...[
           const SizedBox(width: 12),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: diff == 0 ? const Color(0xFFDDF1E8) : waiting, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: diff == 0 ? okBg : waiting, borderRadius: BorderRadius.circular(12)),
             child: Text(diffText, style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
         ],
@@ -231,7 +231,7 @@ class _ShiftScreenState extends State<ShiftScreen> {
     final differs = (cu != null && cu != expUsd) || (cl != null && cl != expLbp) || (cc != null && cc != expCard);
 
     return Scaffold(
-      appBar: AppBar(title: Text(t('shift.title')), backgroundColor: Colors.white),
+      appBar: AppBar(title: Text(t('shift.title')), backgroundColor: surface),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -248,7 +248,7 @@ class _ShiftScreenState extends State<ShiftScreen> {
                     const SizedBox(height: 14),
                     FilledButton(style: saffronButton(), onPressed: busy ? null : open, child: Text(t('shift.open'))),
                   ] else ...[
-                    Text(t('shift.since', {'time': '${sh['openedAt']}'.replaceFirst('T', ' ').split('.').first}), style: const TextStyle(color: slate)),
+                    Text(t('shift.since', {'time': '${sh['openedAt']}'.replaceFirst('T', ' ').split('.').first}), style: TextStyle(color: slate)),
                     const SizedBox(height: 6),
                     Text(t('shift.help'), style: const TextStyle(fontSize: 16)),
                     const SizedBox(height: 14),

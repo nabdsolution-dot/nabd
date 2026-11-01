@@ -21,6 +21,8 @@ class AppState extends ChangeNotifier {
   String? cashierName;
   String roleId = '';
   String lang = 'en';
+  String themeMode = 'system'; // system | light | dark
+  double zoom = 1.0;
   Map<String, dynamic>? shift;
   Set<String> permissions = {};
 
@@ -50,6 +52,8 @@ class AppState extends ChangeNotifier {
     tillId = _prefs.getString('tillId') ?? '';
     lbpRate = _prefs.getInt('lbpRate') ?? 89500;
     lang = _prefs.getString('lang') ?? 'en';
+    themeMode = _prefs.getString('themeMode') ?? 'system';
+    zoom = (_prefs.getDouble('zoom') ?? 1.0).clamp(0.7, 1.8);
     currentLang = lang;
     queue = _readList('queue');
     rejected = _readList('rejected');
@@ -190,6 +194,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     unawaited(sync());
     return sale;
+  }
+
+  // ---- display ----
+  Future<void> setThemeMode(String m) async {
+    themeMode = m;
+    await _prefs.setString('themeMode', m);
+    notifyListeners();
+  }
+
+  Future<void> setZoom(double z) async {
+    zoom = double.parse(z.clamp(0.7, 1.8).toStringAsFixed(2));
+    await _prefs.setDouble('zoom', zoom);
+    notifyListeners();
   }
 
   // ---- language ----
