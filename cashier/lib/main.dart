@@ -547,7 +547,7 @@ class _SellScreenState extends State<SellScreen> {
                         ? Center(child: Text(s.products.isEmpty ? t('sell.empty') : t('sell.nomatch'),
                             style: TextStyle(color: slate, fontSize: 18)))
                         : GridView.builder(
-                            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                                 maxCrossAxisExtent: _tileW, mainAxisExtent: _tileH, crossAxisSpacing: 12, mainAxisSpacing: 12),
                             itemCount: shown.length,
                             itemBuilder: (_, i) => _tile(shown[i]),
