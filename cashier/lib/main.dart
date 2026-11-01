@@ -7,6 +7,7 @@ import 'app_state.dart';
 import 'models.dart';
 import 'receipt.dart';
 import 'screens_extra.dart';
+import 'screens_profile.dart';
 import 'strings.dart';
 
 // The accent colors follow the chosen color scheme (see applyPalette).
@@ -254,6 +255,40 @@ class DisplaySheet extends StatelessWidget {
                 ),
             ]),
             const SizedBox(height: 20),
+            Text(t('disp.size'), style: TextStyle(color: slate)),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 's', label: Text('S')),
+                  ButtonSegment(value: 'm', label: Text('M')),
+                  ButtonSegment(value: 'l', label: Text('L')),
+                ],
+                selected: {state.gridSize},
+                onSelectionChanged: (v) => state.setGridSize(v.first),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(t('disp.cart'), style: TextStyle(color: slate)),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(value: 'auto', label: Text(t('disp.auto'))),
+                  ButtonSegment(value: 'side', label: Text(t('disp.side'))),
+                  ButtonSegment(value: 'bottom', label: Text(t('disp.bottom'))),
+                ],
+                selected: {state.cartPos},
+                onSelectionChanged: (v) => state.setCartPos(v.first),
+              ),
+            ),
+            SwitchListTile(contentPadding: EdgeInsets.zero, title: Text(t('disp.cartopen')), value: state.cartOpen, onChanged: state.setCartOpen),
+            SwitchListTile(contentPadding: EdgeInsets.zero, title: Text(t('disp.topbar')), value: state.headerShown, onChanged: state.setHeaderShown),
+            const SizedBox(height: 12),
             Row(children: [
               Text(t('disp.zoom'), style: TextStyle(color: slate)),
               const Spacer(),
@@ -513,7 +548,7 @@ class _SellScreenState extends State<SellScreen> {
                             style: TextStyle(color: slate, fontSize: 18)))
                         : GridView.builder(
                             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 190, mainAxisExtent: 168, crossAxisSpacing: 12, mainAxisSpacing: 12),
+                                maxCrossAxisExtent: _tileW, mainAxisExtent: _tileH, crossAxisSpacing: 12, mainAxisSpacing: 12),
                             itemCount: shown.length,
                             itemBuilder: (_, i) => _tile(shown[i]),
                           ),
@@ -522,12 +557,12 @@ class _SellScreenState extends State<SellScreen> {
     );
     return Scaffold(
       body: Column(children: [
-        _header(),
+        if (s.headerShown) _header() else _headerStrip(),
         Expanded(
           child: LayoutBuilder(builder: (context, c) {
-            if (c.maxWidth >= 820) {
-              return Row(children: [Expanded(child: products), _cartPanel(true)]);
-            }
+            final side = s.cartPos == 'side' || (s.cartPos == 'auto' && c.maxWidth >= 820);
+            if (!s.cartOpen) return Column(children: [Expanded(child: products), _cartBar()]);
+            if (side) return Row(children: [Expanded(child: products), _cartPanel(true)]);
             return Column(children: [
               Expanded(flex: 5, child: products),
               Expanded(flex: 6, child: _cartPanel(false)),
@@ -548,6 +583,9 @@ class _SellScreenState extends State<SellScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         ),
       );
+
+  double get _tileW => s.gridSize == 's' ? 140 : (s.gridSize == 'l' ? 260 : 190);
+  double get _tileH => s.gridSize == 's' ? 128 : (s.gridSize == 'l' ? 220 : 168);
 
   Widget _tile(Product p) {
     final inCart = s.cart.where((l) => l.product.id == p.id).fold<int>(0, (a, l) => a + l.qty);
@@ -600,61 +638,107 @@ class _SellScreenState extends State<SellScreen> {
     final text = isOnline && n == 0
         ? t('status.synced')
         : (isOnline ? t('status.online_waiting', {'n': '$n'}) : t('status.offline_waiting', {'n': '$n'}));
+    final count = s.cart.fold<int>(0, (a, l) => a + l.qty);
     return Container(
-      height: 64, padding: const EdgeInsets.symmetric(horizontal: 16),
+      height: 64, padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(color: surface, border: Border(bottom: BorderSide(color: line))),
-      child: LayoutBuilder(builder: (context, c) => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: c.maxWidth, minHeight: 64),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Row(children: [
-              Container(
-                width: 36, height: 36, alignment: Alignment.center,
-                decoration: BoxDecoration(color: saffron, borderRadius: BorderRadius.circular(10)),
-                child: const Text('N', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: onSaffron)),
-              ),
-              const SizedBox(width: 12),
-              Text(t('sell.title'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-              const SizedBox(width: 16),
-              TextButton.icon(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ReturnsScreen(state: s))),
-                icon: const Icon(Icons.undo), label: Text(t('nav.returns')),
-              ),
-              TextButton.icon(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ShiftScreen(state: s))),
-                icon: const Icon(Icons.access_time), label: Text(t('nav.shift')),
-              ),
-            ]),
-            Row(children: [
-              const SizedBox(width: 16),
-              InkWell(
-                onTap: () => s.sync(),
-                borderRadius: BorderRadius.circular(22),
-                child: Container(
-                  height: 40, padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: isOnline && n == 0 ? okBg : waiting,
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: Row(children: [
-                    Icon(Icons.circle, size: 10, color: isOnline && n == 0 ? const Color(0xFF1B8A6B) : const Color(0xFFC98A00)),
+      child: LayoutBuilder(builder: (context, c) {
+        final compact = c.maxWidth < 760;
+        final tiny = c.maxWidth < 430;
+        Widget action(IconData icon, String label, Widget Function() page) => compact
+            ? IconButton(tooltip: label, icon: Icon(icon), onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page())))
+            : TextButton.icon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page())),
+                icon: Icon(icon), label: Text(label));
+        return Row(children: [
+          Container(
+            width: 36, height: 36, alignment: Alignment.center,
+            decoration: BoxDecoration(color: saffron, borderRadius: BorderRadius.circular(10)),
+            child: const Text('N', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: onSaffron)),
+          ),
+          if (!compact) ...[
+            const SizedBox(width: 10),
+            Text(t('sell.title'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+          ],
+          const SizedBox(width: 4),
+          action(Icons.undo, t('nav.returns'), () => ReturnsScreen(state: s)),
+          action(Icons.access_time, t('nav.shift'), () => ShiftScreen(state: s)),
+          const Spacer(),
+          Tooltip(
+            message: text,
+            child: InkWell(
+              onTap: () => s.sync(),
+              borderRadius: BorderRadius.circular(22),
+              child: Container(
+                height: 38, padding: EdgeInsets.symmetric(horizontal: tiny ? 10 : 14),
+                decoration: BoxDecoration(color: isOnline && n == 0 ? okBg : waiting, borderRadius: BorderRadius.circular(22)),
+                child: Row(children: [
+                  Icon(Icons.circle, size: 10, color: isOnline && n == 0 ? const Color(0xFF1B8A6B) : const Color(0xFFC98A00)),
+                  if (!tiny) ...[
                     const SizedBox(width: 8),
-                    Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                  ]),
-                ),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: compact ? 110 : 220),
+                      child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    ),
+                  ] else if (n > 0) ...[
+                    const SizedBox(width: 6),
+                    Text('$n', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ],
+                ]),
               ),
-              const SizedBox(width: 4),
-              displayButton(context, s),
-              langButton(s),
-              const SizedBox(width: 8),
-              Text(s.cashierName ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-              const SizedBox(width: 8),
-              TextButton(onPressed: s.signOut, child: Text(t('sell.signout'))),
+            ),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: s.cartOpen ? t('cart.hide') : t('cart.show'),
+            onPressed: () => s.setCartOpen(!s.cartOpen),
+            icon: Badge(isLabelVisible: count > 0, label: Text('$count'), child: Icon(s.cartOpen ? Icons.shopping_cart : Icons.shopping_cart_outlined)),
+          ),
+          UserMenu(state: s, compact: compact),
+        ]);
+      }),
+    );
+  }
+
+  Widget _headerStrip() => Material(
+        color: surface,
+        child: InkWell(
+          onTap: () => s.setHeaderShown(true),
+          child: Container(
+            height: 26, alignment: Alignment.center,
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: line))),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.keyboard_arrow_down, size: 20),
+              Text(t('bar.show'), style: TextStyle(fontSize: 12, color: slate)),
             ]),
+          ),
+        ),
+      );
+
+  Widget _cartBar() {
+    final tt = s.totals;
+    final count = s.cart.fold<int>(0, (a, l) => a + l.qty);
+    return Material(
+      color: cedarDeep,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          child: Row(children: [
+            IconButton(
+              tooltip: t('cart.show'),
+              onPressed: () => s.setCartOpen(true),
+              icon: Badge(isLabelVisible: count > 0, label: Text('$count'), child: const Icon(Icons.shopping_cart, color: Colors.white)),
+            ),
+            Expanded(child: Text(usd(tt.total), style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))),
+            FilledButton(
+              style: saffronButton().copyWith(minimumSize: const WidgetStatePropertyAll(Size(140, 48))),
+              onPressed: s.cart.isEmpty ? null : _pay,
+              child: Text(t('sell.pay')),
+            ),
           ]),
         ),
-      )),
+      ),
     );
   }
 
@@ -666,6 +750,7 @@ class _SellScreenState extends State<SellScreen> {
         Text(t('sell.current'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
         const Spacer(),
         if (s.cart.isNotEmpty) TextButton(onPressed: s.clearCart, child: Text(t('sell.clear'))),
+        IconButton(tooltip: t('cart.hide'), icon: const Icon(Icons.keyboard_arrow_down), onPressed: () => s.setCartOpen(false)),
       ]),
     );
     final lines = <Widget>[

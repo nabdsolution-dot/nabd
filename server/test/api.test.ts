@@ -237,3 +237,16 @@ describe('product pictures and app version', () => {
     expect(r.body).toHaveProperty('latest');
   });
 });
+
+describe('profile', () => {
+  it('shows store and role names, and lets a cashier change their PIN', async () => {
+    const me = await call('GET', '/me', cashier);
+    expect(me.body.storeName).toBe('Hamra');
+    expect(me.body.roleName).toBeTruthy();
+    expect((await call('POST', '/me/pin', cashier, { currentPin: '0000', newPin: '6666' })).status).toBe(403);
+    expect((await call('POST', '/me/pin', cashier, { currentPin: '4321', newPin: '1234' })).status).toBe(409);
+    expect((await call('POST', '/me/pin', cashier, { currentPin: '4321', newPin: '6666' })).status).toBe(200);
+    expect((await call('POST', '/auth/pin', undefined, { storeId: hamra, pin: '6666' })).status).toBe(200);
+    expect((await call('POST', '/me/pin', cashier, { currentPin: '6666', newPin: '4321' })).status).toBe(200);
+  });
+});

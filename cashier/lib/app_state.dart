@@ -8,7 +8,7 @@ import 'api.dart';
 import 'models.dart';
 import 'strings.dart';
 
-const appVersion = '1.2.0';
+const appVersion = '1.3.0';
 
 class AppState extends ChangeNotifier {
   late SharedPreferences _prefs;
@@ -24,6 +24,13 @@ class AppState extends ChangeNotifier {
   String themeMode = 'system'; // system | light | dark
   double zoom = 1.0;
   String accent = 'green';
+  String gridSize = 'm'; // s | m | l
+  String cartPos = 'auto'; // auto | side | bottom
+  bool cartOpen = true;
+  bool headerShown = true;
+  String roleName = '';
+  String storeName = '';
+  String email = '';
   String? updateVersion; // set when the server knows a newer app version
   String updateUrl = '';
   bool updateDismissed = false;
@@ -59,6 +66,10 @@ class AppState extends ChangeNotifier {
     lang = _prefs.getString('lang') ?? 'en';
     themeMode = _prefs.getString('themeMode') ?? 'system';
     accent = _prefs.getString('accent') ?? 'green';
+    gridSize = _prefs.getString('gridSize') ?? 'm';
+    cartPos = _prefs.getString('cartPos') ?? 'auto';
+    cartOpen = _prefs.getBool('cartOpen') ?? true;
+    headerShown = _prefs.getBool('headerShown') ?? true;
     zoom = (_prefs.getDouble('zoom') ?? 1.0).clamp(0.7, 1.8);
     currentLang = lang;
     queue = _readList('queue');
@@ -114,6 +125,9 @@ class AppState extends ChangeNotifier {
     final me = await a.get('/me') as Map;
     cashierName = me['name'] as String;
     roleId = (me['roleId'] as String?) ?? '';
+    roleName = (me['roleName'] as String?) ?? roleId;
+    storeName = (me['storeName'] as String?) ?? '';
+    email = (me['email'] as String?) ?? '';
     permissions = ((me['permissions'] as List?) ?? []).map((e) => e.toString()).toSet();
     online = true;
     notifyListeners();
@@ -208,6 +222,34 @@ class AppState extends ChangeNotifier {
     themeMode = m;
     await _prefs.setString('themeMode', m);
     notifyListeners();
+  }
+
+  Future<void> setGridSize(String v) async {
+    gridSize = v;
+    await _prefs.setString('gridSize', v);
+    notifyListeners();
+  }
+
+  Future<void> setCartPos(String v) async {
+    cartPos = v;
+    await _prefs.setString('cartPos', v);
+    notifyListeners();
+  }
+
+  Future<void> setCartOpen(bool v) async {
+    cartOpen = v;
+    await _prefs.setBool('cartOpen', v);
+    notifyListeners();
+  }
+
+  Future<void> setHeaderShown(bool v) async {
+    headerShown = v;
+    await _prefs.setBool('headerShown', v);
+    notifyListeners();
+  }
+
+  Future<void> changePin(String current, String next) async {
+    await api!.post('/me/pin', {'currentPin': current, 'newPin': next});
   }
 
   Future<void> setAccent(String a) async {
