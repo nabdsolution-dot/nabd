@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'api.dart';
 import 'app_state.dart';
@@ -99,6 +100,16 @@ class _NabdCashierAppState extends State<NabdCashierApp> with WidgetsBindingObse
             final mq = MediaQuery.of(context);
             final z = state.zoom;
             Widget body = child ?? const SizedBox.shrink();
+            if (state.updateVersion != null && !state.updateDismissed) {
+              // The banner takes the top inset, so the screen below must not add it again.
+              body = Directionality(
+                textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+                child: Column(children: [
+                  updateBanner(state),
+                  Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: body)),
+                ]),
+              );
+            }
             if ((z - 1.0).abs() > 0.001) {
               // Real zoom: lay the app out on a smaller (or larger) virtual screen, then scale it to fit.
               final w = mq.size.width / z, h = mq.size.height / z;
@@ -133,6 +144,37 @@ ButtonStyle saffronButton() => FilledButton.styleFrom(
       textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     );
+
+/// Shown on every screen when the server knows a newer app version.
+Widget updateBanner(AppState s) {
+  if (s.updateVersion == null || s.updateDismissed) return const SizedBox.shrink();
+  return Material(
+    color: saffron,
+    child: SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(children: [
+          const Icon(Icons.system_update, color: onSaffron),
+          const SizedBox(width: 10),
+          Expanded(child: Text(t('upd.msg', {'v': s.updateVersion!}), style: const TextStyle(color: onSaffron, fontWeight: FontWeight.w600))),
+          if (s.updateUrl.isNotEmpty)
+            TextButton(
+              onPressed: () async {
+                try {
+                  await launchUrl(Uri.parse(s.updateUrl), mode: LaunchMode.externalApplication);
+                } catch (_) {
+                  // No browser to open the link; the banner stays so it can be tried again.
+                }
+              },
+              child: Text(t('upd.get'), style: const TextStyle(color: onSaffron, fontWeight: FontWeight.w800)),
+            ),
+          TextButton(onPressed: s.dismissUpdate, child: Text(t('upd.later'), style: const TextStyle(color: onSaffron))),
+        ]),
+      ),
+    ),
+  );
+}
 
 Widget displayButton(BuildContext context, AppState s) => IconButton(
       tooltip: t('disp.title'),

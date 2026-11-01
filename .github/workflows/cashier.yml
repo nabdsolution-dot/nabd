@@ -2,6 +2,9 @@ name: Build cashier app
 
 # Builds the Flutter cashier app in the cloud. Run it from the Actions tab (Run workflow),
 # then download the APK (Android) or the zip (Windows) from the run's Artifacts.
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
   push:
@@ -35,6 +38,15 @@ jobs:
         with:
           name: nabd-cashier-android-apk
           path: cashier/build/app/outputs/flutter-apk/app-release.apk
+      - name: Publish the APK as a release (a stable download link for the update banner)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')
+          cp build/app/outputs/flutter-apk/app-release.apk nabd-cashier.apk
+          gh release create "v$v" nabd-cashier.apk --title "Nabd Cashier $v" --notes "Android cashier app $v" --latest \
+            || gh release upload "v$v" nabd-cashier.apk --clobber
 
   windows:
     runs-on: windows-latest

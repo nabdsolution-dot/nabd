@@ -8,7 +8,7 @@ import 'api.dart';
 import 'models.dart';
 import 'strings.dart';
 
-const appVersion = '1.0.0';
+const appVersion = '1.1.0';
 
 class AppState extends ChangeNotifier {
   late SharedPreferences _prefs;
@@ -23,6 +23,10 @@ class AppState extends ChangeNotifier {
   String lang = 'en';
   String themeMode = 'system'; // system | light | dark
   double zoom = 1.0;
+  String? updateVersion; // set when the server knows a newer app version
+  String updateUrl = '';
+  bool updateDismissed = false;
+  DateTime? _lastUpdateCheck;
   Map<String, dynamic>? shift;
   Set<String> permissions = {};
 
@@ -65,6 +69,7 @@ class AppState extends ChangeNotifier {
     }
     if (configured) api = Api(serverUrl);
     ready = true;
+    unawaited(checkUpdate());
     _timer = Timer.periodic(const Duration(seconds: 30), (_) => sync());
     notifyListeners();
   }
@@ -271,6 +276,45 @@ class AppState extends ChangeNotifier {
     return (res['refundCents'] as num?)?.toInt() ?? 0;
   }
 
+  // ---- app updates ----
+  static bool _newer(String latest, String current) {
+    List<int> parts(String v) => v.split('+').first.split('.').map((x) => int.tryParse(x) ?? 0).toList();
+    final a = parts(latest), b = parts(current);
+    for (var i = 0; i < 3; i++) {
+      final x = i < a.length ? a[i] : 0, y = i < b.length ? b[i] : 0;
+      if (x != y) return x > y;
+    }
+    return false;
+  }
+
+  /// Asks the server for the newest app version. Quiet on any failure.
+  Future<void> checkUpdate({bool force = false}) async {
+    final a = api;
+    if (a == null) return;
+    final last = _lastUpdateCheck;
+    if (!force && last != null && DateTime.now().difference(last) < const Duration(hours: 6)) return;
+    _lastUpdateCheck = DateTime.now();
+    try {
+      final r = await a.get('/app/version');
+      final latest = (r is Map ? r['latest'] : null)?.toString() ?? '';
+      if (latest.isNotEmpty && _newer(latest, appVersion)) {
+        if (updateVersion != latest) updateDismissed = false;
+        updateVersion = latest;
+        updateUrl = (r['url'] ?? '').toString();
+      } else {
+        updateVersion = null;
+      }
+      notifyListeners();
+    } catch (_) {
+      // Offline or an older server without this route: no banner.
+    }
+  }
+
+  void dismissUpdate() {
+    updateDismissed = true;
+    notifyListeners();
+  }
+
   // ---- sync ----
   Future<void> sync() async {
     final a = api;
@@ -283,6 +327,7 @@ class AppState extends ChangeNotifier {
           {'appVersion': appVersion, 'queuedSales': queue.length});
       online = true;
       syncMessage = null;
+      unawaited(checkUpdate());
     } on OfflineException {
       online = false;
     } on ApiException catch (e) {

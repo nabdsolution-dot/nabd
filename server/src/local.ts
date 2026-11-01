@@ -15,6 +15,7 @@ import { buildApp } from './app.js';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = process.env.NABD_DATA ?? join(root, 'data');
 mkdirSync(dataDir, { recursive: true });
+process.env.NABD_DATA = dataDir;
 
 const pool = createPool(process.env.DATABASE_URL ?? 'pglite:' + join(dataDir, 'db'));
 await migrate(pool);
