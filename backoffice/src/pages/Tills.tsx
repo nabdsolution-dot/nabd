@@ -6,12 +6,14 @@ import { useAuth } from '../auth';
 import { api, type StoreRow, type TillRow } from '../api';
 import { timeAgo, usd } from '../format';
 import { errText, t } from '../i18n';
+import '../till/till.css';
 
 export function Tills() {
   const { can } = useAuth();
   const stores = useLoad<StoreRow[]>('/stores');
   const tills = useLoad<TillRow[]>('/tills');
   const [adding, setAdding] = useState(false);
+  const [setup, setSetup] = useState<string | null>(null);
   const [storeId, setStoreId] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +73,7 @@ export function Tills() {
                       <td className="strong">{r.name}</td><td className="muted">{r.store}</td>
                       <td><Pill kind={r.online ? 'ok' : 'warn'}>{r.online ? t('Online') : r.lastSyncAt ? t('Offline since {when}', { when: timeAgo(r.lastSyncAt) }) : t('Not connected yet')}</Pill></td>
                       <td className="num">{r.queuedSales}</td><td className="muted">{timeAgo(r.lastSyncAt)}</td><td className="muted">{r.appVersion ?? '—'}</td>
-                      <td><button className="btn" type="button" onClick={() => { void navigator.clipboard?.writeText(`Store ID: ${r.storeId}\nTill ID: ${r.id}`); }}>{t('Copy setup')}</button></td>
+                      <td><button className="btn" type="button" onClick={() => { const text = `Store ID: ${r.storeId}\nTill ID: ${r.id}`; try { void navigator.clipboard?.writeText(text).catch(() => undefined); } catch { /* shown below instead */ } setSetup(text); }}>{t('Copy setup')}</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -80,6 +82,16 @@ export function Tills() {
           )}
         </section>
       </main>
+      {setup && (
+        <div className="tl-modal" role="dialog" aria-modal="true" aria-label={t('Copy setup')} onClick={() => setSetup(null)}>
+          <div className="tl-sheet" onClick={(e) => e.stopPropagation()}>
+            <h2>{t('Setup for the cashier app')}</h2>
+            <p>{t('Copy these two lines into the app. If copying did not work, select the text and press Ctrl+C.')}</p>
+            <textarea readOnly rows={3} value={setup} autoFocus onFocus={(e) => e.currentTarget.select()} style={{ width: '100%', fontFamily: 'monospace', fontSize: 14, padding: 10 }} />
+            <button className="btn btn-primary" type="button" onClick={() => setSetup(null)}>{t('Close')}</button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
