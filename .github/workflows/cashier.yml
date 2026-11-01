@@ -1,0 +1,54 @@
+name: Build cashier app
+
+# Builds the Flutter cashier app in the cloud. Run it from the Actions tab (Run workflow),
+# then download the APK (Android) or the zip (Windows) from the run's Artifacts.
+on:
+  workflow_dispatch:
+  push:
+    paths: ['cashier/**', '.github/workflows/cashier.yml']
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cashier
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - name: Generate platform folders
+        run: flutter create . --platforms=android,windows --org com.nabd --project-name nabd_cashier
+      - name: Allow network access (INTERNET, and http for a shop-local server)
+        run: |
+          f=android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application android:usesCleartextTraffic="true"#' "$f"
+          sed -i 's#android:label="[^"]*"#android:label="Nabd Cashier"#' "$f"
+      - run: flutter pub get
+      - run: flutter analyze
+        continue-on-error: true
+      - run: flutter test
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nabd-cashier-android-apk
+          path: cashier/build/app/outputs/flutter-apk/app-release.apk
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: cashier
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: flutter create . --platforms=windows --org com.nabd --project-name nabd_cashier
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nabd-cashier-windows
+          path: cashier/build/windows/x64/runner/Release
