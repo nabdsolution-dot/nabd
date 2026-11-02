@@ -71,3 +71,7 @@ cd backoffice && npm test    # 7 tests
 - **On account**: choose the *On account* tender. The sale is refused if it passes the customer's credit limit. Receive payments from the Customer screen. A sale made offline can still be rejected by the server if the limit was passed meanwhile; it is parked in the rejected list.
 - **Promotions** (back office → Promotions): mix and match bundles ("any 2 for $4"), percent off when buying N, and buy N get the cheapest free. They apply automatically at the till.
 - **Line discounts**: each cart line has its own %. Over 5% needs a supervisor.
+
+## Building with AI helpers
+
+`.claude/skills/` holds the brainstorming, writing-plans and test-driven-development skills (adapted from the Superpowers collection). `.claude/agents/` holds three agents: `nabd-planner`, `nabd-designer`, `nabd-tester`. Designs go in `docs/specs/`, plans in `docs/plans/`.
