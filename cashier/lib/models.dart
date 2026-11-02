@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'promo.dart';
+
 class Product {
   Product({
     required this.id,
@@ -61,30 +63,129 @@ class Product {
 }
 
 class CartLine {
-  CartLine(this.product, this.qty);
+  CartLine(this.product, this.qty, [this.discountPct = 0]);
   final Product product;
   int qty;
+  int discountPct;
   int get totalCents => product.priceCents * qty;
 }
 
-class Totals {
-  Totals(this.subtotal, this.discount, this.vat) : total = subtotal - discount + vat;
-  final int subtotal;
-  final int discount;
-  final int vat;
-  final int total;
+class Loyalty {
+  const Loyalty({this.enabled = true, this.earnPerUsd = 1, this.pointValueCents = 1});
+  final bool enabled;
+  final int earnPerUsd;
+  final int pointValueCents;
+  factory Loyalty.fromJson(Map<String, dynamic> j) => Loyalty(
+        enabled: j['enabled'] != false,
+        earnPerUsd: (j['earnPerUsd'] as num?)?.toInt() ?? 1,
+        pointValueCents: ((j['pointValueCents'] as num?)?.toInt() ?? 1).clamp(1, 1000000).toInt(),
+      );
+  Map<String, dynamic> toJson() => {'enabled': enabled, 'earnPerUsd': earnPerUsd, 'pointValueCents': pointValueCents};
 }
 
-/// Same arithmetic as the server, so the till and the back office agree to the cent.
-Totals computeTotals(List<CartLine> lines, int discountCents) {
-  var subtotal = 0;
-  var vatRaw = 0.0;
-  for (final l in lines) {
-    subtotal += l.totalCents;
-    vatRaw += l.totalCents * l.product.vatBp / 10000;
+class Customer {
+  Customer({required this.id, required this.name, this.phone, this.points = 0, this.balanceCents = 0, this.creditLimitCents = 0});
+  final String id;
+  final String name;
+  final String? phone;
+  final int points;
+  final int balanceCents;
+  final int creditLimitCents;
+  int get room => creditLimitCents - balanceCents;
+  factory Customer.fromJson(Map<String, dynamic> j) => Customer(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        phone: j['phone'] as String?,
+        points: (j['points'] as num?)?.toInt() ?? 0,
+        balanceCents: (j['balanceCents'] as num?)?.toInt() ?? 0,
+        creditLimitCents: (j['creditLimitCents'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class LineCalc {
+  LineCalc(this.gross, this.promo, this.manual, this.promoId);
+  final int gross;
+  final int promo;
+  final int manual;
+  final String? promoId;
+}
+
+class Totals {
+  Totals({
+    required this.subtotal, required this.lineOff, required this.promoOff, required this.manualLine,
+    required this.orderManual, required this.pointsOff, required this.vat, required this.total,
+    required this.earned, required this.promoNames, required this.lines, required this.maxRedeem,
+  });
+  final int subtotal;
+  final int lineOff;
+  final int promoOff;
+  final int manualLine;
+  final int orderManual;
+  final int pointsOff;
+  final int vat;
+  final int total;
+  final int earned;
+  final List<String> promoNames;
+  final List<LineCalc> lines;
+  final int maxRedeem;
+  int get discount => lineOff + orderManual + pointsOff;
+}
+
+/// Same arithmetic as the server and the web till, so every screen agrees to the cent.
+Totals computeTotals(
+  List<CartLine> lines, {
+  List<Promo> promos = const [],
+  int orderPct = 0,
+  int redeem = 0,
+  Loyalty loyalty = const Loyalty(),
+  bool hasCustomer = false,
+}) {
+  final res = applyPromos(lines.map((l) => PromoLine(l.product.id, l.qty, l.product.priceCents)).toList(), promos);
+  final calc = <LineCalc>[];
+  for (var i = 0; i < lines.length; i++) {
+    final gross = lines[i].totalCents;
+    final promo = res.promoCents[i] < gross ? res.promoCents[i] : gross;
+    final manual = ((gross - promo) * lines[i].discountPct / 100).round();
+    calc.add(LineCalc(gross, promo, manual, res.promoIds[i]));
   }
-  final vat = subtotal == 0 ? 0 : (vatRaw * (subtotal - discountCents) / subtotal).round();
-  return Totals(subtotal, discountCents, vat);
+  final subtotal = calc.fold<int>(0, (a, c) => a + c.gross);
+  final promoOff = calc.fold<int>(0, (a, c) => a + c.promo);
+  final manualLine = calc.fold<int>(0, (a, c) => a + c.manual);
+  final lineOff = promoOff + manualLine;
+  final netSub = subtotal - lineOff;
+  final om = (netSub * orderPct / 100).round();
+  final orderManual = om < netSub ? om : netSub;
+  final maxRedeem = loyalty.enabled && hasCustomer ? ((netSub - orderManual) ~/ loyalty.pointValueCents).clamp(0, 1 << 30).toInt() : 0;
+  final pointsOff = (redeem < maxRedeem ? redeem : maxRedeem) * loyalty.pointValueCents;
+  final orderOff = orderManual + pointsOff;
+  var vatRaw = 0.0;
+  for (var i = 0; i < lines.length; i++) {
+    vatRaw += (calc[i].gross - calc[i].promo - calc[i].manual) * lines[i].product.vatBp / 10000;
+  }
+  final vat = netSub == 0 ? 0 : (vatRaw * (netSub - orderOff) / netSub).round();
+  final total = netSub - orderOff + vat;
+  final earned = hasCustomer && loyalty.enabled ? total * loyalty.earnPerUsd ~/ 100 : 0;
+  return Totals(
+    subtotal: subtotal, lineOff: lineOff, promoOff: promoOff, manualLine: manualLine, orderManual: orderManual,
+    pointsOff: pointsOff, vat: vat, total: total, earned: earned, promoNames: res.names, lines: calc, maxRedeem: maxRedeem,
+  );
+}
+
+/// A built-in picture for an item without an uploaded photo.
+String iconFor(String name) {
+  const map = <List<String>>[
+    ['coffee|espresso|latte|cappuccino|nescafe|قهوة', '☕'], ['tea|شاي', '🍵'], ['juice|عصير|orange', '🧃'], ['water|مياه|sparkl', '💧'],
+    ['jallab|drink|soda|cola|pepsi', '🥤'], ['beer|بيرة', '🍺'], ['wine|نبيذ', '🍷'],
+    ['croissant', '🥐'], ['manoush|zaatar|pizza|pie|فطير|منقوش', '🥙'], ['ka.?ak|bread|خبز|bagel|toast', '🥖'], ['cake|كعك|cookie|biscuit|حلو|sweet', '🍰'],
+    ['cheese|halloumi|جبن|حلوم', '🧀'], ['labneh|milk|yogh?urt|dairy|لبن|حليب', '🥛'], ['egg|بيض', '🥚'],
+    ['chicken|دجاج', '🍗'], ['meat|beef|lamb|لحم|burger', '🍔'], ['fish|سمك|tuna', '🐟'],
+    ['apple|تفاح', '🍎'], ['banana|موز', '🍌'], ['fruit|فاكه', '🍇'], ['tomato|بندور', '🍅'], ['vegetable|potato|خضار|salad', '🥗'],
+    ['chocolate|شوكولا', '🍫'], ['chips|snack', '🍿'], ['rice|pasta|أرز', '🍚'], ['soap|shampoo|clean|صابون', '🧼'], ['paper|tissue|ورق', '🧻'],
+  ];
+  for (final e in map) {
+    if (RegExp(e[0], caseSensitive: false).hasMatch(name)) return e[1];
+  }
+  return '🛒';
 }
 
 String usd(int cents) => '\$${(cents / 100).toStringAsFixed(2)}';

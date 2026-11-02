@@ -89,9 +89,28 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     return (await app.pool.query(`${select} where p.id = $1`, [id])).rows[0];
   });
 
+  const loyaltySettings = async () => {
+    const r = await app.pool.query("select key, value from settings where key like 'loyalty_%'");
+    const m = new Map(r.rows.map((x) => [x.key as string, x.value as string]));
+    return {
+      enabled: (m.get('loyalty_enabled') ?? '1') === '1',
+      earnPerUsd: Number(m.get('loyalty_earn_per_usd') ?? 1),
+      pointValueCents: Number(m.get('loyalty_point_value_cents') ?? 1)
+    };
+  };
+
   app.get('/settings', { preHandler: app.authenticate }, async () => {
     const r = await app.pool.query("select value from settings where key = 'lbp_rate'");
-    return { lbpRate: Number(r.rows[0]?.value ?? 89500) };
+    return { lbpRate: Number(r.rows[0]?.value ?? 89500), loyalty: await loyaltySettings() };
+  });
+
+  app.put('/settings/loyalty', { preHandler: app.requirePerm('manage_promotions') }, async (req) => {
+    const b = z.object({ enabled: z.boolean(), earnPerUsd: z.number().min(0).max(1000), pointValueCents: z.number().int().min(1).max(10000) }).parse(req.body);
+    const set = (k: string, v: string) => app.pool.query('insert into settings (key, value) values ($1, $2) on conflict (key) do update set value = excluded.value', [k, v]);
+    await set('loyalty_enabled', b.enabled ? '1' : '0');
+    await set('loyalty_earn_per_usd', String(b.earnPerUsd));
+    await set('loyalty_point_value_cents', String(b.pointValueCents));
+    return loyaltySettings();
   });
 
   app.put('/settings/lbp-rate', { preHandler: app.requirePerm('manage_prices') }, async (req) => {

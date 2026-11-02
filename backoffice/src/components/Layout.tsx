@@ -9,6 +9,8 @@ const icons: Record<string, ReactNode> = {
   products: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5z" /><path d="M3 8v8l9 5 9-5V8" /></svg>,
   tills: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>,
   shifts: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3 2" /></svg>,
+  customers: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>,
+  promotions: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12l-8 8-9-9V3h8z" /><circle cx="7.5" cy="7.5" r="1.5" /></svg>,
   users: <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5" /></svg>
 };
 
@@ -19,6 +21,8 @@ export function Layout() {
     { to: '/products', label: t('Products'), icon: 'products', show: can('view_reports', 'manage_products', 'manage_prices') },
     { to: '/tills', label: t('Stores and tills'), icon: 'tills', show: can('view_reports', 'manage_tills') },
     { to: '/shifts', label: t('Shifts'), icon: 'shifts', show: can('view_reports') },
+    { to: '/customers', label: t('Customers'), icon: 'customers', show: can('manage_customers') },
+    { to: '/promotions', label: t('Promotions and loyalty'), icon: 'promotions', show: can('manage_promotions') },
     { to: '/users', label: t('Users and roles'), icon: 'users', show: can('manage_users') }
   ].filter((i) => i.show);
 

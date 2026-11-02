@@ -7,6 +7,8 @@ import { Products } from './pages/Products';
 import { Tills } from './pages/Tills';
 import { Users } from './pages/Users';
 import { Shifts } from './pages/Shifts';
+import { Customers } from './pages/Customers';
+import { Promotions } from './pages/Promotions';
 import { Till } from './till/Till';
 import { LangProvider, t } from './i18n';
 
@@ -22,6 +24,8 @@ function Gate() {
         <Route path="products" element={<Products />} />
         <Route path="tills" element={<Tills />} />
         <Route path="shifts" element={can('view_reports') ? <Shifts /> : <Navigate to={home} replace />} />
+        <Route path="customers" element={can('manage_customers') ? <Customers /> : <Navigate to={home} replace />} />
+        <Route path="promotions" element={can('manage_promotions') ? <Promotions /> : <Navigate to={home} replace />} />
         <Route path="users" element={can('manage_users') ? <Users /> : <Navigate to={home} replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

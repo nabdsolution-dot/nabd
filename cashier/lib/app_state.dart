@@ -6,9 +6,10 @@ import 'package:uuid/uuid.dart';
 
 import 'api.dart';
 import 'models.dart';
+import 'promo.dart';
 import 'strings.dart';
 
-const appVersion = '1.3.0';
+const appVersion = '1.4.0';
 
 class AppState extends ChangeNotifier {
   late SharedPreferences _prefs;
@@ -51,6 +52,10 @@ class AppState extends ChangeNotifier {
 
   final List<CartLine> cart = [];
   int discountPercent = 0;
+  List<Promo> promos = [];
+  Loyalty loyalty = const Loyalty();
+  Customer? customer;
+  int redeem = 0;
   Timer? _timer;
   bool _syncing = false;
 
@@ -80,6 +85,12 @@ class AppState extends ChangeNotifier {
           .map((e) => Product.fromJson(e as Map<String, dynamic>))
           .toList();
     }
+    final pr = _prefs.getString('promos');
+    if (pr != null) {
+      promos = (jsonDecode(pr) as List).map((e) => Promo.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    }
+    final lo = _prefs.getString('loyalty');
+    if (lo != null) loyalty = Loyalty.fromJson(Map<String, dynamic>.from(jsonDecode(lo) as Map));
     if (configured) api = Api(serverUrl);
     ready = true;
     unawaited(checkUpdate());
@@ -142,6 +153,8 @@ class AppState extends ChangeNotifier {
     permissions = {};
     cart.clear();
     discountPercent = 0;
+    customer = null;
+    redeem = 0;
     notifyListeners();
   }
 
@@ -165,20 +178,50 @@ class AppState extends ChangeNotifier {
   void clearCart() {
     cart.clear();
     discountPercent = 0;
+    customer = null;
+    redeem = 0;
     notifyListeners();
   }
 
-  void setDiscount(int percent) {
+  /// A person's own discounts (not promotions) over 5% of the sale need the supervisor permission.
+  bool _overLimit(int orderPct) {
+    if (canDiscount10) return false;
+    final t = computeTotals(cart, promos: promos, orderPct: orderPct, loyalty: loyalty);
+    return (t.manualLine + t.orderManual) * 20 > t.subtotal;
+  }
+
+  /// Returns false when the discount is not allowed for this cashier.
+  bool setDiscount(int percent) {
+    if (_overLimit(percent)) return false;
     discountPercent = percent;
     notifyListeners();
+    return true;
   }
 
-  int get discountCents {
-    final sub = cart.fold<int>(0, (a, l) => a + l.totalCents);
-    return (sub * discountPercent / 100).round();
+  bool setLineDiscount(CartLine l, int percent) {
+    final old = l.discountPct;
+    l.discountPct = percent;
+    if (_overLimit(discountPercent)) {
+      l.discountPct = old;
+      return false;
+    }
+    notifyListeners();
+    return true;
   }
 
-  Totals get totals => computeTotals(cart, discountCents);
+  void setCustomer(Customer? c) {
+    customer = c;
+    redeem = 0;
+    notifyListeners();
+  }
+
+  void setRedeem(int n) {
+    redeem = n < 0 ? 0 : n;
+    notifyListeners();
+  }
+
+  Totals get totals =>
+      computeTotals(cart, promos: promos, orderPct: discountPercent, redeem: redeem, loyalty: loyalty, hasCustomer: customer != null);
 
   bool get canDiscount10 => permissions.contains('discount_over_5');
 
@@ -198,20 +241,40 @@ class AppState extends ChangeNotifier {
               DateTime.now().millisecondsSinceEpoch, isUtc: true)
           .toIso8601String(),
       'tender': tender,
-      'discountCents': t.discount,
+      'discountCents': t.orderManual,
       'lbpRate': lbpRate,
-      'lines': cart.map((l) => {'productId': l.product.id, 'qty': l.qty}).toList(),
+      if (customer != null) 'customerId': customer!.id,
+      'redeemPoints': redeem < t.maxRedeem ? redeem : t.maxRedeem,
+      'lines': [
+        for (var i = 0; i < cart.length; i++)
+          {
+            'productId': cart[i].product.id,
+            'qty': cart[i].qty,
+            'discountCents': t.lines[i].manual,
+            'promoCents': t.lines[i].promo,
+            'promoId': t.lines[i].promo > 0 ? t.lines[i].promoId : null,
+          }
+      ],
       // display only, the server recomputes totals
       '_total': t.total,
       '_subtotal': t.subtotal,
       '_vat': t.vat,
       '_cashier': cashierName,
-      '_lines': cart.map((l) => {'name': l.product.name, 'qty': l.qty, 'unit': l.product.priceCents}).toList(),
+      '_customer': customer?.name,
+      '_earned': t.earned,
+      '_pointsOff': t.pointsOff,
+      '_promos': t.promoNames,
+      '_lines': [
+        for (var i = 0; i < cart.length; i++)
+          {'name': cart[i].product.name, 'qty': cart[i].qty, 'unit': cart[i].product.priceCents, 'off': t.lines[i].promo + t.lines[i].manual}
+      ],
     };
     queue.add(sale);
     await _save();
     cart.clear();
     discountPercent = 0;
+    customer = null;
+    redeem = 0;
     notifyListeners();
     unawaited(sync());
     return sale;
@@ -326,6 +389,22 @@ class AppState extends ChangeNotifier {
     return (res['refundCents'] as num?)?.toInt() ?? 0;
   }
 
+  // ---- customers (need the server) ----
+  Future<List<Customer>> searchCustomers(String q) async {
+    final res = await api!.get('/customers', {'limit': '20', if (q.trim().isNotEmpty) 'search': q.trim()}) as List;
+    return res.map((e) => Customer.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+  }
+
+  Future<Customer> createCustomer(String name, String phone) async {
+    final res = await api!.post('/customers', {'name': name.trim(), 'phone': phone.trim().isEmpty ? null : phone.trim()}) as Map;
+    return Customer.fromJson(Map<String, dynamic>.from(res));
+  }
+
+  Future<Customer> takePayment(Customer c, int cents) async {
+    final res = await api!.post('/customers/${c.id}/payments', {'amountCents': cents, 'method': 'cash'}) as Map;
+    return Customer.fromJson(Map<String, dynamic>.from(res));
+  }
+
   // ---- app updates ----
   static bool _newer(String latest, String current) {
     List<int> parts(String v) => v.split('+').first.split('.').map((x) => int.tryParse(x) ?? 0).toList();
@@ -426,6 +505,17 @@ class AppState extends ChangeNotifier {
     final s = await a.get('/settings') as Map;
     lbpRate = (s['lbpRate'] as num).toInt();
     await _prefs.setInt('lbpRate', lbpRate);
+    if (s['loyalty'] is Map) {
+      loyalty = Loyalty.fromJson(Map<String, dynamic>.from(s['loyalty'] as Map));
+      await _prefs.setString('loyalty', jsonEncode(loyalty.toJson()));
+    }
+    try {
+      final pr = await a.get('/promotions') as List;
+      promos = pr.map((e) => Promo.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+      await _prefs.setString('promos', jsonEncode(promos.map((p) => p.toJson()).toList()));
+    } on ApiException {
+      // Older server or no permission: keep the promotions we already have.
+    }
   }
 
   @override

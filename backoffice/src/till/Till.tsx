@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { Product } from '../api';
+import type { Customer, Product } from '../api';
+import { iconFor } from './icons';
 import { LangSwitch, t } from '../i18n';
 
 const errText = (e: unknown): string => (e instanceof Error ? t(e.message) : t('Something went wrong.'));
@@ -100,14 +101,18 @@ function ReceiptView({ sale, onDone }: { sale: Sale; onDone: () => void }) {
         <p>{cfg!.storeName} · {cfg!.tillName}</p>
         <p>{t('Receipt')} {sale.receiptNo}<br />{new Date(sale.soldAt).toLocaleString()}<br />{sale.display.cashier}</p>
         <hr />
-        {sale.display.lines.map((l, i) => <div key={i} className="r"><span>{l.qty} × {l.name}</span><span>{usd(l.qty * l.unit)}</span></div>)}
+        {sale.display.customer && <p>{t('Customer')}: {sale.display.customer}</p>}
+        {sale.display.lines.map((l, i) => <div key={i}><div className="r"><span>{l.qty} × {l.name}</span><span>{usd(l.qty * l.unit)}</span></div>{l.off > 0 && <div className="r"><span>&nbsp;&nbsp;{t('Discount')}</span><span>-{usd(l.off)}</span></div>}</div>)}
+        {sale.display.promoNames.map((n) => <div key={n} className="r"><span>★ {n}</span></div>)}
         <hr />
         <div className="r"><span>{t('Subtotal')}</span><span>{usd(sale.display.subtotal)}</span></div>
         {sale.discountCents > 0 && <div className="r"><span>{t('Discount')}</span><span>-{usd(sale.discountCents)}</span></div>}
+        {sale.display.pointsOff > 0 && <div className="r"><span>{t('Points')}</span><span>-{usd(sale.display.pointsOff)}</span></div>}
         <div className="r"><span>{t('VAT')}</span><span>{usd(sale.display.vat)}</span></div>
         <div className="r b"><span>{t('Total')}</span><span>{usd(sale.display.total)}</span></div>
         <div className="r"><span>{t('LBP')}</span><span>{lbp(sale.display.total, sale.lbpRate || lbpRate)}</span></div>
-        <div className="r"><span>{t('Paid by')}</span><span>{sale.tender.toUpperCase()}</span></div>
+        <div className="r"><span>{t('Paid by')}</span><span>{sale.tender === 'account' ? t('On account') : sale.tender.toUpperCase()}</span></div>
+        {sale.display.earned > 0 && <div className="r"><span>{t('Points earned')}</span><span>+{sale.display.earned}</span></div>}
       </div>
       <div className="tl-row"><button className="tl-btn" onClick={() => window.print()}>{t('Print receipt')}</button><button className="tl-btn primary" onClick={onDone} autoFocus>{t('New sale')}</button></div>
     </Modal>
@@ -122,17 +127,49 @@ function Pay({ onClose, onDone }: { onClose: () => void; onDone: (s: Sale) => vo
   const due = tender === 'lbp' ? Math.round(tot.total * st.lbpRate / 100) : tot.total;
   const givenN: number | null = tender === 'usd' ? parseUsdToCents(given) : Number(given.replace(/[^\d]/g, '')) || 0;
   const change = tender === 'usd' ? (givenN ?? 0) - tot.total : tender === 'lbp' ? (givenN ?? 0) - due : 0;
-  const ok = tender === 'card' || (givenN !== null && change >= 0 && given !== '');
+  const c = st.customer;
+  const room = c ? (c.creditLimitCents ?? 0) - (c.balanceCents ?? 0) : 0;
+  const acctOk = !!c && tot.total <= room;
+  const ok = tender === 'account' ? acctOk : tender === 'card' || (givenN !== null && change >= 0 && given !== '');
   return (
     <Modal title={t('Payment')} onClose={onClose}>
       <p className="tl-big">{usd(tot.total)} <small>{lbp(tot.total, st.lbpRate)}</small></p>
       <div className="tl-row" role="tablist">
-        {(['usd', 'lbp', 'card'] as const).map((k) => <button key={k} role="tab" aria-selected={tender === k} className={'tl-btn' + (tender === k ? ' primary' : '')} onClick={() => { setTender(k); setGiven(''); }}>{k === 'usd' ? 'USD' : k === 'lbp' ? 'LBP' : t('Card')}</button>)}
+        {(['usd', 'lbp', 'card', 'account'] as const).map((k) => <button key={k} role="tab" aria-selected={tender === k} className={'tl-btn' + (tender === k ? ' primary' : '')} onClick={() => { setTender(k); setGiven(''); }}>{k === 'usd' ? 'USD' : k === 'lbp' ? 'LBP' : k === 'card' ? t('Card') : t('On account')}</button>)}
       </div>
-      {tender !== 'card' && <label>{t('Cash received')} {tender === 'lbp' && <small>({due.toLocaleString()} LBP)</small>}
+      {tender === 'account' && (c ? <p className={acctOk ? 'tl-ok' : 'tl-err'}>{c.name}: {t('Available credit')} {usd(Math.max(0, room))}{!acctOk && ' — ' + t('over the limit')}</p> : <p className="tl-err">{t('Choose a customer first.')}</p>)}
+      {tender !== 'card' && tender !== 'account' && <label>{t('Cash received')} {tender === 'lbp' && <small>({due.toLocaleString()} LBP)</small>}
         <input autoFocus inputMode="decimal" value={given} onChange={(e) => setGiven(e.target.value)} /></label>}
-      {tender !== 'card' && given !== '' && <p className={change >= 0 ? 'tl-ok' : 'tl-err'}>{change >= 0 ? t('Change') : t('Short by')}: {tender === 'usd' ? usd(Math.abs(change)) : Math.abs(change).toLocaleString('en-US') + ' LBP'}</p>}
+      {tender !== 'card' && tender !== 'account' && given !== '' && <p className={change >= 0 ? 'tl-ok' : 'tl-err'}>{change >= 0 ? t('Change') : t('Short by')}: {tender === 'usd' ? usd(Math.abs(change)) : Math.abs(change).toLocaleString('en-US') + ' LBP'}</p>}
       <button className="tl-btn primary full" disabled={!ok} onClick={() => onDone(S.completeSale(tender))}>{t('Complete sale')}</button>
+    </Modal>
+  );
+}
+
+function CustomerPicker({ onClose }: { onClose: () => void }) {
+  const st = useStore();
+  const [q, setQ] = useState('');
+  const [list, setList] = useState<Customer[]>([]);
+  const [err, setErr] = useState('');
+  const [nw, setNw] = useState({ name: '', phone: '' });
+  const [pay, setPay] = useState('');
+  const run = async () => { setErr(''); try { setList(await S.searchCustomers(q)); } catch { setErr(t('Customers need a connection to the server.')); } };
+  useEffect(() => { void run(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const pick = (c: Customer) => { S.setCustomer(c); onClose(); };
+  const add = async () => { if (!nw.name.trim()) return; try { pick(await S.createCustomer(nw)); } catch (e) { setErr(errText(e)); } };
+  const c = st.customer;
+  const receive = async () => {
+    const amt = parseUsdToCents(pay); if (!c || !amt) return;
+    try { const u = await S.takePayment(c.id, amt, 'cash'); S.setCustomer(u); setPay(''); } catch (e) { setErr(errText(e)); }
+  };
+  return (
+    <Modal title={t('Customer')} onClose={onClose} wide>
+      {err && <p role="alert" className="tl-err">{err}</p>}
+      {c && <div className="tl-ok"><b>{c.name}</b> · {t('Points')}: {c.points} · {t('Balance')}: {usd(c.balanceCents ?? 0)}
+        <div className="tl-row"><input aria-label={t('Payment')} placeholder={t('Payment on account')} value={pay} onChange={(e) => setPay(e.target.value)} /><button className="tl-btn sm" onClick={receive}>{t('Receive')}</button><button className="tl-btn sm" onClick={() => { S.setCustomer(null); }}>{t('Remove')}</button></div></div>}
+      <div className="tl-row"><input aria-label={t('Search')} placeholder={t('Name or phone')} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && run()} autoFocus /><button className="tl-btn" onClick={run}>{t('Find')}</button></div>
+      <div className="tl-list">{list.map((x) => <button key={x.id} className="tl-btn" onClick={() => pick(x)}>{x.name} · {x.phone ?? ''} · {x.points} {t('pts')}</button>)}</div>
+      <div className="tl-row"><input aria-label={t('Name')} placeholder={t('New customer name')} value={nw.name} onChange={(e) => setNw({ ...nw, name: e.target.value })} /><input aria-label={t('Phone')} placeholder={t('Phone')} value={nw.phone} onChange={(e) => setNw({ ...nw, phone: e.target.value })} /><button className="tl-btn primary" onClick={add}>{t('Add')}</button></div>
     </Modal>
   );
 }
@@ -214,7 +251,7 @@ function Shift({ onClose }: { onClose: () => void }) {
 function Register() {
   const st = useStore();
   const [q, setQ] = useState('');
-  const [modal, setModal] = useState<null | 'pay' | 'returns' | 'shift'>(null);
+  const [modal, setModal] = useState<null | 'pay' | 'returns' | 'shift' | 'cust'>(null);
   const [receipt, setReceipt] = useState<Sale | null>(null);
   const [note, setNote] = useState('');
   const search = useRef<HTMLInputElement>(null);
@@ -238,6 +275,7 @@ function Register() {
         <span className={'tl-pill ' + (st.online ? 'ok' : 'off')}>{st.online ? t('Online') : t('Offline')}{waiting > 0 && ` · ${t('{n} waiting', { n: waiting })}`}</span>
         {st.rejected.length > 0 && <span className="tl-pill off" title={st.rejected.map((r) => `${r.receiptNo}: ${r.reason}`).join('\n')}>{t('{n} rejected', { n: st.rejected.length })}</span>}
         <span className="tl-grow" />
+        <button className="tl-btn sm" onClick={() => setModal('cust')}>{st.customer ? st.customer.name : t('Customer')}</button>
         <button className="tl-btn sm" onClick={() => setModal('returns')}>{t('Return')}</button>
         <button className="tl-btn sm" onClick={() => setModal('shift')}>{t('Shift')}</button>
         <LangSwitch style={{ color: '#C9D4D0' }} />
@@ -251,7 +289,7 @@ function Register() {
           {st.syncMessage && <p role="status" className="tl-err">{st.syncMessage}</p>}
           <div className="tl-grid">
             {list.map((p: Product) => <button key={p.id} className="tl-tile" onClick={() => S.addProduct(p)}>
-              {p.image ? <img src={p.image} alt="" loading="lazy" /> : <span className="tl-ph" aria-hidden="true">{p.name.slice(0, 1).toUpperCase()}</span>}
+              {p.image ? <img src={p.image} alt="" loading="lazy" /> : <span className="tl-ph" aria-hidden="true">{iconFor(p.name)}</span>}
               <span>{p.name}</span><b>{usd(p.priceCents)}</b></button>)}
             {list.length === 0 && <p>{st.products.length === 0 ? t('No products loaded yet. Connect to the server once.') : t('Nothing found.')}</p>}
           </div>
@@ -259,18 +297,24 @@ function Register() {
         <aside className="tl-cart" aria-label={t('Cart')}>
           <div className="tl-lines">
             {st.cart.length === 0 && <p className="tl-sub">{t('Scan or tap a product to start.')}</p>}
-            {st.cart.map((l) => (
+            {st.cart.map((l, i) => (
               <div key={l.product.id} className="tl-line">
-                <span className="n">{l.product.name}</span>
+                <span className="n">{l.product.name}
+                  <select className="tl-ld" aria-label={t('Line discount')} value={l.discountPct} onChange={(e) => { const m = S.setLineDiscount(l.product.id, Number(e.target.value)); setNote(m ? t(m) : ''); }}>{[0, 5, 10, 15, 20].map((d) => <option key={d} value={d}>{d}%</option>)}</select>
+                  {tot.lines[i]!.promo > 0 && <small className="tl-promo"> ★ -{usd(tot.lines[i]!.promo)}</small>}</span>
                 <span className="q"><button onClick={() => S.changeQty(l.product.id, -1)} aria-label={t('Less')}>−</button><b>{l.qty}</b><button onClick={() => S.changeQty(l.product.id, 1)} aria-label={t('More')}>+</button></span>
-                <span className="p">{usd(l.product.priceCents * l.qty)}</span>
+                <span className="p">{usd(l.product.priceCents * l.qty - tot.lines[i]!.promo - tot.lines[i]!.manual)}</span>
               </div>
             ))}
           </div>
           <div className="tl-sum">
             <div className="r"><span>{t('Subtotal')}</span><span>{usd(tot.subtotal)}</span></div>
             <div className="r"><span>{t('Discount')}
-              <select aria-label={t('Discount')} value={st.discountPct} onChange={(e) => S.setDiscount(Number(e.target.value))}>{[0, 5, 10, 15, 20].map((d) => <option key={d} value={d}>{d}%</option>)}</select></span><span>-{usd(tot.discount)}</span></div>
+              <select aria-label={t('Discount')} value={st.discountPct} onChange={(e) => { const m = S.setDiscount(Number(e.target.value)); setNote(m ? t(m) : ''); }}>{[0, 5, 10, 15, 20].map((d) => <option key={d} value={d}>{d}%</option>)}</select></span><span>-{usd(tot.orderManual)}</span></div>
+            {tot.lineOff > 0 && <div className="r"><span>{t('Line & promo discounts')}{tot.promoNames.length > 0 && <small> ★ {tot.promoNames.join(', ')}</small>}</span><span>-{usd(tot.lineOff)}</span></div>}
+            {st.customer && st.loyalty.enabled && <div className="r"><span>{t('Points')} ({st.customer.points})
+              <input className="tl-pts" type="number" min={0} max={Math.min(st.customer.points, tot.maxRedeem)} aria-label={t('Redeem points')} value={st.redeem} onChange={(e) => S.setRedeem(Math.min(Number(e.target.value) || 0, st.customer!.points, tot.maxRedeem))} /></span><span>-{usd(tot.pointsOff)}</span></div>}
+            {st.customer && tot.earned > 0 && <div className="r sub"><span>{t('Points earned')}</span><span>+{tot.earned}</span></div>}
             <div className="r"><span>{t('VAT')}</span><span>{usd(tot.vat)}</span></div>
             <div className="r tot"><span>{t('Total')}</span><span>{usd(tot.total)}</span></div>
             <div className="r sub"><span>{t('LBP')}</span><span>{lbp(tot.total, st.lbpRate)}</span></div>
@@ -280,6 +324,7 @@ function Register() {
         </aside>
       </main>
       {modal === 'pay' && <Pay onClose={() => setModal(null)} onDone={(s) => { setModal(null); setReceipt(s); }} />}
+      {modal === 'cust' && <CustomerPicker onClose={() => setModal(null)} />}
       {modal === 'returns' && <Returns onClose={() => setModal(null)} />}
       {modal === 'shift' && <Shift onClose={() => setModal(null)} />}
       {receipt && <ReceiptView sale={receipt} onDone={() => setReceipt(null)} />}

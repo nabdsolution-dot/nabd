@@ -50,3 +50,12 @@ export interface Dashboard {
   top: { name: string; category: string; units: number; salesCents: number }[];
   alerts: { kind: string; severity: string; title: string; body: string }[];
 }
+
+export interface Customer {
+  id: string; code: string | null; name: string; phone: string | null; email: string | null; address: string | null; notes: string | null;
+  birthday: string | null; creditLimitCents: number; points: number; active: boolean; balanceCents: number;
+}
+export interface StatementLine { id: number; at: string; kind: 'sale' | 'payment' | 'refund' | 'adjustment'; ref: string | null; method: string | null; note: string | null; by: string | null; amountCents: number; points: number; balanceCents: number; pointsBalance: number }
+export interface Statement { customer: Customer; from: string | null; to: string | null; openingCents: number; openingPoints: number; lines: StatementLine[]; closingCents: number; closingPoints: number }
+export interface Promotion { id: string; name: string; kind: 'bundle' | 'percent' | 'buy_get'; productIds: string[]; qty: number; priceCents: number | null; percent: number | null; active: boolean; startsOn: string | null; endsOn: string | null }
+export interface Loyalty { enabled: boolean; earnPerUsd: number; pointValueCents: number }

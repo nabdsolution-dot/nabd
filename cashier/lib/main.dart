@@ -6,6 +6,7 @@ import 'api.dart';
 import 'app_state.dart';
 import 'models.dart';
 import 'receipt.dart';
+import 'screens_customer.dart';
 import 'screens_extra.dart';
 import 'screens_profile.dart';
 import 'strings.dart';
@@ -609,7 +610,7 @@ class _SellScreenState extends State<SellScreen> {
                       ? Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true)
                       : Container(
                           color: okBg, alignment: Alignment.center,
-                          child: Text(p.name.substring(0, 1).toUpperCase(), style: TextStyle(color: dark(context) ? cedarLight : cedarDeep, fontSize: 30, fontWeight: FontWeight.w700)),
+                          child: Text(iconFor(p.name), style: const TextStyle(fontSize: 38)),
                         ),
                 ),
               ),
@@ -757,12 +758,29 @@ class _SellScreenState extends State<SellScreen> {
       for (final l in s.cart)
         ListTile(
           title: Text(l.product.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
-          subtitle: Text(t('sell.each', {'price': usd(l.product.priceCents)})),
+          subtitle: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 6, children: [
+            Text(t('sell.each', {'price': usd(l.product.priceCents)})),
+            PopupMenuButton<int>(
+              tooltip: t('sell.linedisc'),
+              onSelected: (p) {
+                if (!s.setLineDiscount(l, p)) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('sell.needsup'))));
+                }
+              },
+              itemBuilder: (_) => [for (final p in [0, 5, 10, 15, 20]) PopupMenuItem(value: p, child: Text(p == 0 ? t('sell.none') : '$p%'))],
+              child: Chip(
+                visualDensity: VisualDensity.compact,
+                label: Text(l.discountPct == 0 ? '% ${t('sell.linedisc')}' : '-${l.discountPct}%', style: const TextStyle(fontSize: 12)),
+              ),
+            ),
+            if (tt.lines[s.cart.indexOf(l)].promo > 0)
+              Text('★ -${usd(tt.lines[s.cart.indexOf(l)].promo)}', style: const TextStyle(color: Color(0xFF1B7F5A), fontWeight: FontWeight.w700)),
+          ]),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
             IconButton(onPressed: () => s.changeQty(l, -1), icon: const Icon(Icons.remove_circle_outline)),
             Text('${l.qty}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             IconButton(onPressed: () => s.changeQty(l, 1), icon: const Icon(Icons.add_circle_outline)),
-            SizedBox(width: 64, child: Text(usd(l.totalCents), textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.w600))),
+            SizedBox(width: 64, child: Text(usd(l.totalCents - tt.lines[s.cart.indexOf(l)].promo - tt.lines[s.cart.indexOf(l)].manual), textAlign: TextAlign.end, style: const TextStyle(fontWeight: FontWeight.w600))),
           ]),
         ),
     ];
@@ -777,8 +795,31 @@ class _SellScreenState extends State<SellScreen> {
         for (final p in [0, 5, if (s.canDiscount10) 10])
           ChoiceChip(
             label: Text(p == 0 ? t('sell.none') : '$p%'),
-            selected: s.discountPercent == p, onSelected: (_) => s.setDiscount(p),
+            selected: s.discountPercent == p,
+            onSelected: (_) {
+              if (!s.setDiscount(p)) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('sell.needsup'))));
+            },
           ),
+      ]),
+    );
+    final cust = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      child: Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => showCustomerSheet(context, s),
+            icon: const Icon(Icons.person_outline),
+            label: Text(s.customer == null ? t('cust.choose') : '${s.customer!.name} · ${s.customer!.points} ${t('cust.pts')}', overflow: TextOverflow.ellipsis),
+          ),
+        ),
+        if (s.customer != null && s.loyalty.enabled && tt.maxRedeem > 0) ...[
+          const SizedBox(width: 8),
+          FilterChip(
+            label: Text(s.redeem > 0 ? '${t('cust.redeem')} ${s.redeem}' : t('cust.redeem')),
+            selected: s.redeem > 0,
+            onSelected: (_) => s.setRedeem(s.redeem > 0 ? 0 : (s.customer!.points < tt.maxRedeem ? s.customer!.points : tt.maxRedeem)),
+          ),
+        ],
       ]),
     );
     final totals = Container(
@@ -786,7 +827,10 @@ class _SellScreenState extends State<SellScreen> {
       decoration: BoxDecoration(color: cedarDeep, borderRadius: BorderRadius.circular(16)),
       child: Column(children: [
         _row(t('sell.subtotal'), usd(tt.subtotal)),
-        if (tt.discount > 0) _row(t('sell.discount'), '-${usd(tt.discount)}'),
+        if (tt.lineOff > 0) _row(tt.promoNames.isEmpty ? t('sell.linedisc') : '★ ${tt.promoNames.join(', ')}', '-${usd(tt.lineOff)}'),
+        if (tt.orderManual > 0) _row(t('sell.discount'), '-${usd(tt.orderManual)}'),
+        if (tt.pointsOff > 0) _row(t('cust.points'), '-${usd(tt.pointsOff)}'),
+        if (tt.earned > 0) _row(t('cust.earned'), '+${tt.earned}'),
         _row(t('sell.vat'), usd(tt.vat)),
         const SizedBox(height: 6),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -814,12 +858,12 @@ class _SellScreenState extends State<SellScreen> {
       child: LayoutBuilder(builder: (context, c) {
         // On a short screen the whole panel scrolls, so nothing is ever cut off.
         if (c.maxHeight < 560) {
-          return ListView(children: [header, if (s.cart.isEmpty) empty else ...lines, discount, totals, pay]);
+          return ListView(children: [header, if (s.cart.isEmpty) empty else ...lines, discount, cust, totals, pay]);
         }
         return Column(children: [
           header,
           Expanded(child: s.cart.isEmpty ? empty : ListView(children: lines)),
-          discount, totals, pay,
+          discount, cust, totals, pay,
         ]);
       }),
     );
@@ -841,15 +885,18 @@ class _SellScreenState extends State<SellScreen> {
         title: Text(t('pay.title', {'amount': usd(tt.total)})),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text(lbp(tt.total, s.lbpRate), style: TextStyle(fontSize: 18, color: slate)),
+          if (s.customer != null) Text('${s.customer!.name}: ${t('pay.credit')} ${usd(s.customer!.room < 0 ? 0 : s.customer!.room)}', style: TextStyle(color: slate)),
           const SizedBox(height: 20),
-          for (final o in [['usd', t('pay.usd')], ['lbp', t('pay.lbp')], ['card', t('pay.card')]])
+          for (final o in [['usd', t('pay.usd')], ['lbp', t('pay.lbp')], ['card', t('pay.card')], if (s.customer != null) ['account', t('pay.account')]])
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: SizedBox(
                 width: (MediaQuery.of(context).size.width - 140).clamp(160.0, 320.0), height: 60,
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(textStyle: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600)),
-                  onPressed: () => Navigator.pop(ctx, o[0]),
+                  onPressed: o[0] == 'account' && tt.total > s.customer!.room
+                      ? null
+                      : () => Navigator.pop(ctx, o[0]),
                   child: Text(o[1]),
                 ),
               ),

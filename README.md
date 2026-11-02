@@ -63,3 +63,11 @@ cd backoffice && npm test    # 7 tests
 ## Known gaps
 - Server-generated alert texts on the dashboard (for example "Hamra Register 2 is offline") are English only.
 - Cashier app has not been compiled or run on a device yet; expect small fixes on first run.
+
+## Customers, loyalty and promotions (v1.4)
+
+- **Customers** (back office → Customers): name, phone, credit limit, points, statement. At the till tap *Customer* to pick or add one (needs a connection).
+- **Loyalty**: points are earned on every sale to a customer and can be used as a discount. Rates are in Settings.
+- **On account**: choose the *On account* tender. The sale is refused if it passes the customer's credit limit. Receive payments from the Customer screen. A sale made offline can still be rejected by the server if the limit was passed meanwhile; it is parked in the rejected list.
+- **Promotions** (back office → Promotions): mix and match bundles ("any 2 for $4"), percent off when buying N, and buy N get the cheapest free. They apply automatically at the till.
+- **Line discounts**: each cart line has its own %. Over 5% needs a supervisor.

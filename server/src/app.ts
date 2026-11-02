@@ -12,6 +12,8 @@ import { dashboardRoutes } from './routes/dashboard.js';
 import { returnRoutes } from './routes/returns.js';
 import { shiftRoutes } from './routes/shifts.js';
 import { appInfoRoutes } from './routes/appinfo.js';
+import { customerRoutes } from './routes/customers.js';
+import { promotionRoutes } from './routes/promotions.js';
 
 export interface AuthUser {
   id: string;
@@ -104,5 +106,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   await app.register(returnRoutes);
   await app.register(shiftRoutes);
   await app.register(appInfoRoutes);
+  await app.register(customerRoutes);
+  await app.register(promotionRoutes);
   return app;
 }

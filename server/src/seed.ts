@@ -57,6 +57,19 @@ export async function seedDemo(pool: Pool): Promise<void> {
       await pool.query('insert into stock (product_id, store_id, qty) values ($1, $2, $3) on conflict do nothing', [r.rows[0].id, sid, reorder * 3]);
     }
   }
+  // Demo customers and promotions, so the new features can be tried straight away.
+  if (!(await pool.query('select 1 from customers limit 1')).rows[0]) {
+    await pool.query(
+      `insert into customers (code, name, phone, email, address, credit_limit_cents, points) values
+         ('100001', 'Maya Khoury', '+961 70 123 456', 'maya@example.com', 'Hamra, Beirut', 20000, 120),
+         ('100002', 'Georges Haddad', '+961 3 555 010', null, 'Verdun, Beirut', 0, 40)`);
+    const id = async (name: string) => (await pool.query('select id from products where name = $1', [name])).rows[0].id as string;
+    await pool.query(
+      `insert into promotions (name, kind, product_ids, qty, price_cents, percent) values
+         ('Any 2 manousheh for $4.00', 'bundle', $1, 2, 400, null),
+         ('Coffee: buy 3, cheapest free', 'buy_get', $2, 3, null, 100)`,
+      [[await id('Cheese manousheh'), await id('Zaatar manousheh')], [await id('Turkish coffee'), await id('Cappuccino'), await id('Iced latte')]]);
+  }
   const pw = process.env.ADMIN_PASSWORD ?? 'ChangeMe123!';
   const users: [string, string | null, string, string | null, string | null][] = [
     ['Head Office Admin', 'admin@nabd.local', 'head_office', null, null],

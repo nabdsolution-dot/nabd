@@ -108,7 +108,7 @@ class _ReturnsScreenState extends State<ReturnsScreen> {
               Text(t('ret.refund_method'), style: TextStyle(color: slate)),
               const SizedBox(height: 6),
               Wrap(spacing: 8, children: [
-                for (final o in [['usd', t('pay.usd')], ['lbp', t('pay.lbp')], ['card', t('pay.card')]])
+                for (final o in [['usd', t('pay.usd')], ['lbp', t('pay.lbp')], ['card', t('pay.card')], ['account', t('pay.account')]])
                   ChoiceChip(label: Text(o[1]), selected: tender == o[0], onSelected: (_) => setState(() => tender = o[0])),
               ]),
               const SizedBox(height: 12),
